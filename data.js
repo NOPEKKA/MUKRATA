@@ -1,9 +1,9 @@
-import { kv } from '@vercel/kv';
+import { Redis } from '@upstash/redis';
 
+const redis = Redis.fromEnv();
 const DB_KEY = 'mukrata_db';
 
 export default async function handler(req, res) {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -11,17 +11,13 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      const data = await kv.get(DB_KEY);
+      const data = await redis.get(DB_KEY);
       return res.status(200).json(data || null);
     }
-
     if (req.method === 'POST') {
-      const body = req.body;
-      if (!body) return res.status(400).json({ error: 'no body' });
-      await kv.set(DB_KEY, body);
+      await redis.set(DB_KEY, req.body);
       return res.status(200).json({ ok: true });
     }
-
     return res.status(405).json({ error: 'method not allowed' });
   } catch (e) {
     console.error(e);
