@@ -233,9 +233,10 @@ async function syncDown(){
 function loadLocal(){try{return JSON.parse(localStorage.getItem(DB_KEY));}catch{return null;}}
 
 
-db=loadLocal()||JSON.parse(JSON.stringify(DEFAULT));
+let db=loadLocal()||JSON.parse(JSON.stringify(DEFAULT));
 ['reservations','cash','closeouts','shifts','logs','mapItems'].forEach(k=>{if(!db[k])db[k]=[];});
 if(!db.counters)db.counters={bill:0};
+let session=null;
 try{const s=localStorage.getItem(SESS_KEY); if(s) session=db.staff.find(x=>x.id===s)||null;}catch{}
 
 let view='floor',billId=null,payStep=false,modal=null,receipt=null,editorOpen=false,editSel=null,overlay=null,pickUid=null,billView=null,billEdited=false,billBackup=null,dashRange='30d',floorTab='pos',mapOpen=false,mapSel=null,mapTool='rect';
