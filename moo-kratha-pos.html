@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>ร้านหมูกระทะ — POS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#faf9f7; --surface:#ffffff; --line:#ecebe7; --line2:#f3f1ee;
+    --text:#1c1917; --muted:#9a938a; --ink:#1c1917;
+    --green:#15a24a; --greenBg:#eaf6ee;
+    --red:#dc4b34;  --redBg:#fbeae6;
+    --amber:#d18700; --amberBg:#faf0d9;
+    --blue:#2f6fed; --blueBg:#e9eefc;
+    --accent:#e2503a;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{font-family:'IBM Plex Sans Thai',system-ui,sans-serif; background:var(--bg); color:var(--text); display:flex; justify-content:center; -webkit-font-smoothing:antialiased;}
+  #app{width:100%; max-width:460px; height:100vh; display:flex; flex-direction:column; overflow:hidden; position:relative; background:var(--bg);}
+  button{font-family:inherit; cursor:pointer; color:inherit;}
+  input{font-family:inherit;}
+  .muted{color:var(--muted);}
+  svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+
+  header.top{padding:16px 20px 14px; display:flex; align-items:center; justify-content:space-between;}
+  .brand{display:flex; align-items:center; gap:10px;}
+  .brand .flame{font-size:19px;}
+  .shop{font-weight:700; font-size:16px; line-height:1; letter-spacing:-.01em;}
+  .subhead{font-size:12px; color:var(--muted); margin-top:4px;}
+  .ghost-ico{border:1px solid var(--line); background:var(--surface); color:var(--muted); border-radius:10px; padding:8px 11px; font-size:12.5px; display:flex; align-items:center; gap:6px;}
+
+  .content{flex:1; overflow:auto; display:flex; flex-direction:column;}
+  .pad{padding:4px 20px 24px;}
+
+  nav.bottom{display:flex; padding:6px 8px 10px; gap:2px; background:var(--bg); border-top:1px solid var(--line);}
+  nav.bottom button{flex:1; border:none; background:transparent; padding:9px 2px; display:flex; flex-direction:column; align-items:center; gap:5px; font-size:10.5px; color:var(--muted); border-radius:12px;}
+  nav.bottom button.active{color:var(--ink);}
+  nav.bottom button.active svg{stroke-width:2;}
+
+  .legend{padding:2px 20px 12px; display:flex; gap:14px; font-size:12px; color:var(--muted); flex-wrap:wrap;}
+  .legend span{display:flex; align-items:center; gap:6px;}
+  .dot{width:9px;height:9px;border-radius:999px;display:inline-block;}
+  .canvas{position:relative; flex:1; margin:0 16px 16px; border-radius:20px; background:var(--surface); border:1px solid var(--line); overflow:auto; -webkit-overflow-scrolling:touch;}
+  .plane{position:relative;}
+  .fgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(78px,1fr)); gap:10px; padding:12px;}
+  .table.grid{position:static; width:auto; height:80px;}
+  .canvas.edit .plane{background-image:radial-gradient(circle,#e8e6e2 1.2px,transparent 1.2px); background-size:24px 24px;}
+  /* MAP editor */
+  .map-canvas{position:relative;flex:1;margin:0 16px 12px;border-radius:20px;background:#f0ece4;border:1px solid var(--line);overflow:hidden;touch-action:none;}
+  .map-canvas .map-plane{position:relative;width:100%;height:100%;}
+  .map-item{position:absolute;display:flex;align-items:center;justify-content:center;cursor:grab;user-select:none;touch-action:none;font-size:13px;font-weight:600;transform-origin:center center;transition:outline .1s;}
+  .map-item.sel{outline:2.5px solid var(--ink);outline-offset:3px;z-index:10;}
+  .map-ctrl{position:absolute;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;z-index:20;font-size:12px;font-weight:700;}
+  .maptool{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:7px 11px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;}
+  .maptool.on{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .map-panel{padding:8px 16px 10px;display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--line);align-items:center;}
+  .table.flash{animation:flash .45s ease 2; z-index:5;}
+  @keyframes flash{0%,100%{box-shadow:0 0 0 0 rgba(226,80,58,0)}50%{box-shadow:0 0 0 5px rgba(226,80,58,.75)}}
+  .tsearch{display:flex; gap:8px; padding:0 20px 10px;}
+  .tsearch input{flex:1; background:var(--surface); border:1px solid var(--line); border-radius:11px; padding:10px 13px; font-size:14px;}
+  .tsearch button{border:1px solid var(--line); background:var(--surface); border-radius:11px; padding:0 14px; color:var(--muted); display:flex; align-items:center;}
+  .picksearch{width:100%; background:var(--surface); border:1px solid var(--line); border-radius:11px; padding:11px 13px; font-size:14px; margin-bottom:12px;}
+  body.wide #app{max-width:none;}
+  body.wide .overlay{max-width:none;}
+  body.wide .content .pad{max-width:1000px; margin-left:auto; margin-right:auto;}
+  body.wide .content .pad.gcols{max-width:none; display:grid; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); gap:18px; align-items:start;}
+  body.wide .pad.gcols > *{margin:0 !important;}
+  body.wide .pad.gcols .card, body.wide .pad.gcols .stat{padding:28px;}
+  body.wide .pad.gcols .stat.big{padding:34px;}
+  body.wide .pad.gcols .stat .v{font-size:28px;}
+  body.wide .pad.gcols .stat.big .v{font-size:48px;}
+  body.wide .pad.gcols .sec{font-size:12.5px;}
+  body.wide .pad.gcols .menucard{padding:24px 26px;}
+  body.wide .receipt{max-width:520px; margin-left:auto; margin-right:auto;}
+  body.wide .sheet{top:50%; bottom:auto; left:50%; right:auto; transform:translate(-50%,-50%); width:min(480px,calc(100% - 48px)); border-radius:20px; box-shadow:0 20px 60px rgba(0,0,0,.22);}
+  .table{position:absolute; width:92px; height:80px; border-radius:16px; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; user-select:none; touch-action:none; border:1px solid transparent; transition:transform .08s;}
+  .table:active{transform:scale(.97);}
+  .table .num{font-size:22px; font-weight:700; line-height:1.1; letter-spacing:-.02em;}
+  .table .seats{font-size:11px; display:flex; align-items:center; gap:3px; opacity:.7;}
+  .table .st{font-size:10px; font-weight:600;}
+  .table.sel{outline:2px solid var(--ink); outline-offset:2px;}
+  .table .grp{position:absolute; top:5px; right:7px; font-size:9px; font-weight:700; opacity:.6;}
+
+  .btn{width:100%; border:none; padding:15px; border-radius:14px; font-size:15px; font-weight:600; display:flex; align-items:center; justify-content:center; gap:8px;}
+  .btn-primary{background:var(--ink); color:#fff;}
+  .btn-primary:disabled{opacity:.35;}
+  .btn-ghost{background:var(--surface); color:var(--text); border:1px solid var(--line);}
+  .btn-danger{background:var(--redBg); color:var(--red); font-weight:600; padding:13px; font-size:14px; border-radius:12px; border:none; width:100%; display:flex; align-items:center; justify-content:center; gap:7px;}
+  .btn-sm{padding:10px; font-size:13.5px; border-radius:11px;}
+  .link{border:none; background:transparent; color:var(--muted); display:flex; align-items:center; gap:5px; font-size:13.5px;}
+
+  .sec{font-size:11.5px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; margin-bottom:12px;}
+  .card{background:var(--surface); border-radius:18px; padding:18px; border:1px solid var(--line);}
+  .input{width:100%; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:13px 14px; color:var(--text); font-size:15px;}
+  .input::placeholder{color:#c4beb6;}
+  .row{display:flex; gap:12px; align-items:center; margin-bottom:14px;}
+  .row > label{font-size:13.5px; color:var(--muted); width:64px;}
+  .stepper{width:38px; height:38px; border-radius:11px; border:1px solid var(--line); background:var(--surface); color:var(--text); display:flex; align-items:center; justify-content:center;}
+  .stepper:active{background:var(--line2);}
+  .qty{min-width:22px; text-align:center; font-size:16px; font-weight:600;}
+
+  .linerow{display:flex; align-items:center; justify-content:space-between; padding:14px 0; border-bottom:1px solid var(--line2);}
+  .linerow:last-child{border-bottom:none;}
+  .linerow .nm{font-size:15px; font-weight:500;}
+  .linerow .sb{font-size:12.5px; color:var(--muted); margin-top:3px;}
+  .linerow .ctrl{display:flex; align-items:center; gap:14px;}
+
+  .listrow{display:flex; justify-content:space-between; align-items:center; padding:14px 0; border-bottom:1px solid var(--line2);}
+  .listrow:last-child{border-bottom:none;}
+  .chip{border:1px solid var(--line); border-radius:999px; padding:8px 15px; font-size:13px; background:var(--surface); color:var(--muted);}
+  .chip.on{border-color:var(--ink); background:var(--ink); color:#fff;}
+  .iconbtn{border:1px solid var(--line); background:var(--surface); color:var(--muted); border-radius:9px; padding:7px 11px; font-size:13px; display:flex; align-items:center; gap:5px;}
+
+  .menucard{display:flex; align-items:center; gap:14px; background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:16px 18px; margin-bottom:11px; width:100%; text-align:left;}
+  .menucard .ic{width:40px;height:40px;border-radius:12px;background:var(--line2);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .menucard .t{font-size:15px;font-weight:600;}
+  .menucard .d{font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .menucard .arr{margin-left:auto;color:var(--muted);}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .stat{background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:18px;}
+  .stat .l{font-size:12.5px; color:var(--muted); margin-bottom:8px;}
+  .stat .v{font-size:22px; font-weight:700; letter-spacing:-.02em;}
+  .stat.big{grid-column:span 2; padding:22px;}
+  .stat.big .v{font-size:34px;}
+
+  .bars{display:flex; align-items:flex-end; gap:9px; height:120px; padding-top:8px;}
+  .bars .col{flex:1; display:flex; flex-direction:column; align-items:center; gap:8px; height:100%; justify-content:flex-end;}
+  .bars .bar{width:100%; border-radius:6px; background:var(--line); min-height:4px;}
+  .bars .bar.today{background:var(--ink);}
+  .bars .lbl{font-size:11px; color:var(--muted);}
+
+  .overlay{position:fixed; inset:0; background:var(--bg); z-index:30; display:flex; flex-direction:column; max-width:460px; margin:0 auto;}
+  .scrim{position:fixed; inset:0; background:rgba(28,25,23,.4); z-index:40;}
+  .sheet{position:fixed; left:0; right:0; bottom:0; max-width:460px; margin:0 auto; background:var(--surface); z-index:41; border-radius:24px 24px 0 0; padding:22px 20px calc(22px + env(safe-area-inset-bottom)); box-shadow:0 -10px 40px rgba(0,0,0,.12); max-height:84vh; overflow:auto;}
+  .sheet h3{margin:0 0 16px; font-size:17px; font-weight:700; display:flex; justify-content:space-between; align-items:center;}
+  .foot{border-top:1px solid var(--line); padding:16px 20px calc(16px + env(safe-area-inset-bottom)); background:var(--bg);}
+  .center{flex:1; display:flex; align-items:center; justify-content:center; color:var(--muted); text-align:center; padding:24px; font-size:13.5px;}
+  .pick{border:1px solid var(--line); background:var(--surface); border-radius:12px; padding:13px 15px; font-size:15px; font-weight:600; text-align:left; width:100%; margin-bottom:9px; display:flex; justify-content:space-between; align-items:center;}
+
+  .receipt{background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:22px; margin:20px;}
+  .rc-h{text-align:center; margin-bottom:16px;}
+  .rc-h .r1{font-size:17px; font-weight:700;}
+  .rc-h .r2{font-size:12.5px; color:var(--muted); margin-top:4px;}
+  .rc-div{border-top:1px dashed var(--line); margin:14px 0;}
+  .rc-line{display:flex; justify-content:space-between; font-size:14px; padding:4px 0;}
+  .rc-line .q{color:var(--muted); font-size:12.5px; margin-left:6px;}
+  .rc-total{display:flex; justify-content:space-between; align-items:baseline; margin-top:6px;}
+  .rc-total .v{font-size:26px; font-weight:700; letter-spacing:-.02em;}
+  .rc-thanks{text-align:center; font-size:12.5px; color:var(--muted); margin-top:16px;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const I={
+  grid:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>',
+  chart:'<svg viewBox="0 0 24 24"><line x1="4" y1="20" x2="4" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="20" y1="20" x2="20" y2="14"/></svg>',
+  cog:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>',
+  more:'<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>',
+  dash:'<svg viewBox="0 0 24 24"><path d="M12 13a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/><path d="M4 13a8 8 0 0 1 16 0"/><line x1="12" y1="10.5" x2="15" y2="8"/></svg>',
+  logout:'<svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
+  plus:'<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+  minus:'<svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+  trash:'<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+  x:'<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+  check:'<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>',
+  users:'<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>',
+  receipt:'<svg viewBox="0 0 24 24"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="14" y2="13"/></svg>',
+  cash:'<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/></svg>',
+  wallet:'<svg viewBox="0 0 24 24"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0 0 4h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5"/><circle cx="16" cy="13" r="1"/></svg>',
+  qr:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="21" y2="14"/><line x1="21" y1="18" x2="21" y2="21"/></svg>',
+  download:'<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+  edit:'<svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>',
+  back:'<svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>',
+  cal:'<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  clock:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>',
+  list:'<svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
+  swap:'<svg viewBox="0 0 24 24"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>',
+  merge:'<svg viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 9v3a6 6 0 0 0 6 6h3"/></svg>',
+  monitor:'<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
+  phone:'<svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><line x1="11" y1="18" x2="13" y2="18"/></svg>',
+};
+
+const STATUS={available:{label:'ว่าง',c:'--muted'},occupied:{label:'มีลูกค้า',c:'--red'},billing:{label:'รอเคลียร์',c:'--amber'},reserved:{label:'จองไว้',c:'--blue'}};
+const TW=92,TH=80;
+const uid=()=>Math.random().toString(36).slice(2,9);
+const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
+const fmt=n=>'฿'+Number(n||0).toLocaleString('th-TH');
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const dstr=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const today=()=>dstr(new Date());
+const dateOf=iso=>iso?dstr(new Date(iso)):'';
+const TH_MON=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const hhmm=iso=>{const d=new Date(iso);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
+function fmtDT(iso){const d=new Date(iso);return `${d.getDate()} ${TH_MON[d.getMonth()]} ${d.getFullYear()+543} ${hhmm(iso)}`;}
+function dur(a,b){const ms=(new Date(b))-(new Date(a)); const m=Math.max(0,Math.round(ms/60000)); return `${Math.floor(m/60)} ชม. ${m%60} น.`;}
+
+const DEFAULT={
+  settings:{shopName:'ร้านหมูกระทะ',transferQR:'',customName:'ช่องพิเศษ',customImg:''},
+  counters:{bill:0},
+  staff:[{id:'u1',name:'เจ้าของร้าน',role:'owner',pin:'1234'},{id:'u2',name:'พนักงาน A',role:'staff',pin:'1111'}],
+  packages:[{id:'p1',name:'ผู้ใหญ่',price:199},{id:'p2',name:'เด็ก',price:99},{id:'p3',name:'โปรวันธรรมดา',price:179}],
+  menu:[{id:'m1',name:'น้ำเปล่า',price:10,category:'เครื่องดื่ม'},{id:'m2',name:'น้ำอัดลม',price:20,category:'เครื่องดื่ม'},{id:'m3',name:'ไอศกรีม',price:15,category:'ของหวาน'},{id:'m4',name:'ไข่ไก่ (เพิ่ม)',price:10,category:'ท็อปปิ้ง'}],
+  tables:(()=>{const a=[],COLS=10;for(let i=0;i<60;i++){const col=i%COLS,row=Math.floor(i/COLS);a.push({id:'t'+(i+1),label:String(i+1),seats:4,x:20+col*112,y:20+row*100,status:'available'});}return a;})(),
+  bills:[], reservations:[], cash:[], closeouts:[], shifts:[], logs:[], mapItems:[]
+};
+
+/* ============ CLOUD SYNC via /api/data ============ */
+const DB_KEY='mookratha_db_v4', SESS_KEY='mookratha_sess';
+let syncTimer=null;
+function saveLocal(){try{localStorage.setItem(DB_KEY,JSON.stringify(db));}catch{}}
+function save(){
+  saveLocal();
+  clearTimeout(syncTimer);
+  syncTimer=setTimeout(pushCloud,800);
+}
+async function pushCloud(){
+  try{await fetch('/api/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(db)});}
+  catch(e){console.warn('push failed, local only',e);}
+}
+async function syncDown(){
+  try{
+    const r=await fetch('/api/data');
+    if(!r.ok)return;
+    const data=await r.json();
+    if(data){db=data;saveLocal();}
+  }catch(e){console.warn('sync failed, using local',e);}
+}
+function loadLocal(){try{return JSON.parse(localStorage.getItem(DB_KEY));}catch{return null;}}
+
+
+db=loadLocal()||JSON.parse(JSON.stringify(DEFAULT));
+['reservations','cash','closeouts','shifts','logs','mapItems'].forEach(k=>{if(!db[k])db[k]=[];});
+if(!db.counters)db.counters={bill:0};
+try{const s=localStorage.getItem(SESS_KEY); if(s) session=db.staff.find(x=>x.id===s)||null;}catch{}
+
+let view='floor',billId=null,payStep=false,modal=null,receipt=null,editorOpen=false,editSel=null,overlay=null,pickUid=null,billView=null,billEdited=false,billBackup=null,dashRange='30d',floorTab='pos',mapOpen=false,mapSel=null,mapTool='rect';
+const app=document.getElementById('app');
+let layout=localStorage.getItem('mookratha_layout')||(window.innerWidth>=820?'desktop':'phone');
+function applyLayout(){document.body.classList.toggle('wide',layout==='desktop');}
+function logAct(action,detail){db.logs.unshift({id:uid(),at:new Date().toISOString(),staffName:session?session.name:'-',action,detail});}
+function billLog(b,action,detail){
+  if(!b.history)b.history=[];
+  const e={at:new Date().toISOString(),staffName:session?session.name:'-',action,detail:detail||''};
+  b.history.push(e);
+  db.logs.unshift({id:uid(),at:e.at,staffName:e.staffName,action,detail:e.detail,billNo:b.no||null});
+}
+
+/* ============ RENDER ============ */
+function render(){
+  if(!session){app.innerHTML=viewLogin(); afterRender(); return;}
+  const owner=session.role==='owner';
+  const tabs=owner?[['floor','ผังโต๊ะ',I.grid],['more','เพิ่มเติม',I.more],['summary','สรุป',I.chart],['dashboard','แดชบอร์ด',I.dash]]
+                  :[['floor','ผังโต๊ะ',I.grid],['more','เพิ่มเติม',I.more]];
+  let body='';
+  if(view==='floor')body=viewFloor();
+  else if(view==='summary'&&owner)body=viewSummary();
+  else if(view==='dashboard'&&owner)body=viewDashboard();
+  else if(view==='more')body=viewMore();
+  else if(view==='settings'&&owner)body=viewSettings();
+  app.innerHTML=`
+    <header class="top"><div class="brand"><span class="flame">🔥</span>
+      <div><div class="shop">${esc(db.settings.shopName)}</div><div class="subhead">${esc(session.name)} · ${owner?'เจ้าของ':'พนักงาน'}</div></div></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="seg" style="padding:2px"><button class="${layout==='desktop'?'on':''}" data-act="layout" data-l="desktop" style="padding:6px 10px" title="โหมดคอม">${I.monitor}</button><button class="${layout==='phone'?'on':''}" data-act="layout" data-l="phone" style="padding:6px 10px" title="โหมดโทรศัพท์">${I.phone}</button></div>
+        ${owner?`<button class="ghost-ico ${view==='settings'?'':''}" data-act="nav" data-view="settings" title="ตั้งค่า" style="${view==='settings'?'color:var(--ink);border-color:var(--ink)':''}">${I.cog}</button>`:''}
+        <button class="ghost-ico" data-act="logout">${I.logout}</button></div></header>
+    <div class="content">${body}</div>
+    <nav class="bottom">${tabs.map(([id,l,ic])=>`<button class="${view===id?'active':''}" data-act="nav" data-view="${id}">${ic}<span>${l}</span></button>`).join('')}</nav>
+    ${billId?viewBilling():''}
+    ${receipt?viewReceipt():''}
+    ${editorOpen?viewEditor():''}
+    ${mapOpen?viewMap():''}
+    ${overlay?viewOverlay():''}
+    ${billView?viewBillDetail():''}
+    ${modal?viewModal():''}`;
+  afterRender();
+}
+
+/* ---------- LOGIN ---------- */
+function viewLogin(){
+  const p=db.staff.find(s=>s.id===pickUid);
+  return `<div style="height:100vh;display:flex;flex-direction:column;justify-content:center;padding:28px">
+    <div style="text-align:center;margin-bottom:32px"><div style="font-size:44px">🔥</div>
+      <div style="font-size:21px;font-weight:700;margin-top:8px">${esc(db.settings.shopName)}</div>
+      <div class="muted" style="font-size:13.5px;margin-top:6px">${p?'ใส่รหัส PIN':'เลือกผู้ใช้เพื่อเข้าระบบ'}</div></div>
+    ${!p?`<div style="display:flex;flex-direction:column;gap:11px">
+      ${db.staff.map(s=>`<button data-act="login-pick" data-uid="${s.id}" class="pick">${esc(s.name)}<span class="muted" style="font-size:12px;font-weight:400">${s.role==='owner'?'เจ้าของ':'พนักงาน'}</span></button>`).join('')}
+    </div>`:`<div style="display:flex;flex-direction:column;gap:14px">
+      <div style="font-size:15px;font-weight:600;text-align:center">${esc(p.name)}</div>
+      <input id="pin" type="password" inputmode="numeric" placeholder="• • • •" style="background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;font-size:20px;text-align:center;letter-spacing:8px">
+      <div id="pinerr" style="color:var(--red);font-size:13px;text-align:center;display:none">รหัสไม่ถูกต้อง</div>
+      <button class="btn btn-primary" data-act="login-go">เข้าระบบ</button>
+      <button class="link" style="justify-content:center" data-act="login-back">← เลือกผู้ใช้อื่น</button></div>`}
+    <div class="muted" style="text-align:center;font-size:11.5px;margin-top:30px">เดโม่ · เจ้าของ 1234 · พนักงาน 1111</div></div>`;
+}
+
+/* ---------- FLOOR ---------- */
+function planeSize(){
+  const mx=db.tables.reduce((m,t)=>Math.max(m,t.x+TW),0)+20;
+  const my=db.tables.reduce((m,t)=>Math.max(m,t.y+TH),0)+20;
+  return {w:Math.max(mx,320),h:Math.max(my,240)};
+}
+function viewFloor(){
+  const bar=`<div class="tsearch"><input id="tsearch" inputmode="numeric" placeholder="ค้นหาโต๊ะ… (พิมพ์เลขโต๊ะ)"><button data-act="table-search">${I.grid}</button></div>
+    <div class="legend">${Object.entries(STATUS).map(([k,s])=>`<span><i class="dot" style="background:var(${s.c})"></i>${s.label}</span>`).join('')}</div>`;
+  const empty=`<div class="center" style="padding:40px">ยังไม่มีโต๊ะ — เพิ่มที่ ตั้งค่า → จัดผังโต๊ะ</div>`;
+  let inner;
+  if(layout==='phone'){
+    const sorted=[...db.tables].sort((a,b)=>(parseInt(a.label)||0)-(parseInt(b.label)||0));
+    inner=`<div class="canvas" id="canvas">${db.tables.length===0?empty:`<div class="fgrid">${sorted.map(t=>tableEl(t,false,true)).join('')}</div>`}</div>`;
+  }else{
+    const ps=planeSize();
+    inner=`<div class="canvas" id="canvas"><div class="plane" id="plane" style="width:${ps.w}px;height:${ps.h}px;margin:0 auto">
+      ${db.tables.map(t=>tableEl(t,false)).join('')}${db.tables.length===0?empty:''}</div></div>`;
+  }
+  return `<div style="flex:1;display:flex;flex-direction:column;overflow:hidden">${bar}${inner}</div>`;
+}
+function tableEl(t,editing,grid){
+  const col=`var(${STATUS[t.status].c})`;
+  const bg={available:'var(--surface)',occupied:'var(--redBg)',billing:'var(--amberBg)',reserved:'var(--blueBg)'}[t.status];
+  const b=!editing?db.bills.find(x=>x.status==='open'&&x.tableIds.includes(t.id)):null;
+  const grouped=b&&b.tableIds.length>1;
+  const attr=editing?`data-etable="${t.id}"`:`data-table="${t.id}"`;
+  const pos=grid?'':`left:${t.x}px;top:${t.y}px;`;
+  return `<div class="table ${grid?'grid':''} ${editing&&editSel===t.id?'sel':''}" ${attr} style="${pos}background:${bg};border-color:${col};color:${col};cursor:${editing?'grab':'pointer'}">
+    ${grouped?`<span class="grp">รวม</span>`:''}
+    <div class="num" style="color:var(--text)">${esc(t.label)}</div>
+    <div class="seats" style="color:var(--muted)">${I.users} ${t.seats}</div>
+    <div class="st">${STATUS[t.status].label}</div></div>`;
+}
+
+/* ---------- MAP EDITOR ---------- */
+const MAP_SHAPES=[{id:'rect',label:'สี่เหลี่ยม'},{id:'circle',label:'วงกลม'},{id:'line',label:'กำแพง'}];
+const MAP_DEF_COLOR={rect:'#c8a97e',circle:'#8fbcd4',line:'#8c7b6a'};
+
+function newMapItem(type,x,y){
+  return {id:uid(),type,x,y,w:type==='line'?120:90,h:type==='line'?14:80,rot:0,color:MAP_DEF_COLOR[type]||'#c8a97e',text:'',opacity:1};
+}
+function viewMap(){
+  const items=db.mapItems||[];
+  const sel=items.find(x=>x.id===mapSel);
+  const shapeButtons=MAP_SHAPES.map(s=>`<button class="maptool ${mapTool===s.id?'on':''}" data-act="maptool" data-tool="${s.id}">${s.label}</button>`).join('');
+  const propPanel=sel?`<div style="padding:8px 16px 10px;display:flex;flex-wrap:wrap;gap:10px;border-bottom:1px solid var(--line);align-items:center">
+    <div style="display:flex;align-items:center;gap:6px"><label style="font-size:12.5px;color:var(--muted)">สี</label>
+      <input type="color" value="${sel.color}" data-map-prop="color" style="width:36px;height:30px;border:1px solid var(--line);border-radius:8px;cursor:pointer;padding:1px"></div>
+    <div style="display:flex;align-items:center;gap:6px"><label style="font-size:12.5px;color:var(--muted)">ข้อความ</label>
+      <input value="${esc(sel.text)}" placeholder="ข้อความในรูป" data-map-prop="text" style="border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;width:120px"></div>
+    <div style="display:flex;align-items:center;gap:6px"><label style="font-size:12.5px;color:var(--muted)">โปร่งใส</label>
+      <input type="range" min="20" max="100" value="${Math.round((sel.opacity||1)*100)}" data-map-prop="opacity" style="width:80px"></div>
+    <button class="maptool" style="color:var(--red);border-color:var(--red)" data-act="map-del">${I.trash} ลบ</button></div>`:'';
+  return `<div class="overlay">
+    <header class="top"><div class="brand"><button class="ghost-ico" data-act="map-close" style="padding:8px">${I.back}</button>
+      <div class="shop">ผังร้าน (MAP)</div></div></header>
+    <div class="map-panel">${shapeButtons}
+      <span style="color:var(--muted);font-size:12px;margin-left:4px">เลือกรูปทรง → แตะพื้นที่ว่างเพื่อวาง</span></div>
+    ${propPanel}
+    <div class="map-canvas" id="mapCanvas" style="flex:1;margin:12px 12px 12px">
+      <div id="mapPlane" style="width:100%;height:100%;position:relative">${renderMapItems(items,mapSel)}</div>
+    </div>
+    <div style="padding:10px 16px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center">
+      <span class="muted" style="font-size:12px">ลากย้าย · ↻ หมุน · มุมขวาล่าง ปรับขนาด</span>
+      <button class="maptool" data-act="map-clear" style="color:var(--red);font-size:12.5px">ล้างทั้งหมด</button></div>
+  </div>`;
+}
+function renderMapItems(items,selId){
+  return items.map(it=>{
+    const isSel=it.id===selId;
+    const textStyle=`font-size:${Math.min(14,Math.max(9,it.w/8))}px;font-weight:600;color:#fff;text-align:center;word-break:break-all;padding:4px;text-shadow:0 1px 3px rgba(0,0,0,.4);pointer-events:none;`;
+    let inner='';
+    if(it.type==='rect') inner=`<div style="width:100%;height:100%;background:${it.color};border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden"><span style="${textStyle}">${esc(it.text)}</span></div>`;
+    else if(it.type==='circle') inner=`<div style="width:100%;height:100%;background:${it.color};border-radius:50%;display:flex;align-items:center;justify-content:center;overflow:hidden"><span style="${textStyle}">${esc(it.text)}</span></div>`;
+    else inner=`<div style="width:100%;height:100%;background:${it.color};border-radius:4px;display:flex;align-items:center;justify-content:center"><span style="font-size:10px;font-weight:600;color:#fff;opacity:.7">${esc(it.text)}</span></div>`;
+    const ctrls=isSel?`
+      <button class="map-ctrl" style="top:-12px;right:-12px;background:var(--red);color:#fff" data-act="map-del">✕</button>
+      <button class="map-ctrl" style="top:-12px;left:-12px;background:var(--ink);color:#fff" data-act="map-rot" data-id="${it.id}">↻</button>
+      <div data-rsz="${it.id}" style="position:absolute;bottom:-8px;right:-8px;width:18px;height:18px;background:var(--ink);border-radius:4px;cursor:se-resize;z-index:20;touch-action:none"></div>`:'';
+    return `<div class="map-item${isSel?' sel':''}" data-mid="${it.id}" style="position:absolute;left:${it.x}px;top:${it.y}px;width:${it.w}px;height:${it.h}px;transform:rotate(${it.rot||0}deg);opacity:${it.opacity||1};transform-origin:center center">${inner}${ctrls}</div>`;
+  }).join('');
+}
+function attachMapEvents(){
+  const canvas=document.getElementById('mapCanvas'); if(!canvas)return;
+  const plane=document.getElementById('mapPlane'); if(!plane)return;
+  // tap empty area to add
+  const addHandler=e=>{
+    if(e.target!==canvas&&e.target!==plane)return;
+    const r=canvas.getBoundingClientRect();
+    const item=newMapItem(mapTool,e.clientX-r.left-45,e.clientY-r.top-40);
+    db.mapItems.push(item); mapSel=item.id; save(); render();
+  };
+  canvas.addEventListener('pointerdown',addHandler);
+  // drag items
+  document.querySelectorAll('[data-mid]').forEach(el=>{
+    const id=el.getAttribute('data-mid'); let drag=null;
+    el.addEventListener('pointerdown',e=>{
+      if(e.target.getAttribute('data-act')||e.target.getAttribute('data-rsz'))return;
+      e.stopPropagation(); mapSel=id; el.setPointerCapture(e.pointerId);
+      const r=canvas.getBoundingClientRect(); const it=db.mapItems.find(x=>x.id===id);
+      drag={ox:e.clientX-r.left-it.x,oy:e.clientY-r.top-it.y};
+      render();
+    });
+    el.addEventListener('pointermove',e=>{
+      if(!drag)return; const r=canvas.getBoundingClientRect(); const it=db.mapItems.find(x=>x.id===id);
+      if(it){it.x=Math.max(0,e.clientX-r.left-drag.ox); it.y=Math.max(0,e.clientY-r.top-drag.oy);}
+      el.style.left=it.x+'px'; el.style.top=it.y+'px';
+    });
+    el.addEventListener('pointerup',()=>{if(drag){drag=null;save();}});
+  });
+  // resize
+  document.querySelectorAll('[data-rsz]').forEach(rsz=>{
+    const id=rsz.getAttribute('data-rsz'); let rz=null;
+    rsz.addEventListener('pointerdown',e=>{
+      e.stopPropagation(); rsz.setPointerCapture(e.pointerId);
+      const it=db.mapItems.find(x=>x.id===id); if(it)rz={sx:e.clientX,sy:e.clientY,iw:it.w,ih:it.h};
+    });
+    rsz.addEventListener('pointermove',e=>{
+      if(!rz)return; const it=db.mapItems.find(x=>x.id===id);
+      if(!it)return; it.w=Math.max(24,rz.iw+(e.clientX-rz.sx)); it.h=Math.max(14,rz.ih+(e.clientY-rz.sy));
+      const el=document.querySelector(`[data-mid="${id}"]`); if(el){el.style.width=it.w+'px';el.style.height=it.h+'px';}
+    });
+    rsz.addEventListener('pointerup',()=>{if(rz){rz=null;save();}});
+  });
+  // prop inputs
+  document.querySelectorAll('[data-map-prop]').forEach(inp=>{
+    const prop=inp.getAttribute('data-map-prop');
+    const update=()=>{const it=db.mapItems.find(x=>x.id===mapSel);if(!it)return;
+      it[prop]=prop==='opacity'?inp.value/100:inp.value; save(); render();};
+    inp.addEventListener('input',update);
+  });
+}
+
+/* ---------- BILLING ---------- */
+function openBill(t){
+  let b=db.bills.find(x=>x.status==='open'&&x.tableIds.includes(t.id));
+  if(!b){b={id:uid(),no:null,tableIds:[t.id],tableLabel:t.label,status:'open',openedAt:new Date().toISOString(),openedBy:session.id,openedByName:session.name,pkg:{},itm:{}}; db.bills.push(b);}
+  billId=b.id; payStep=false; billEdited=false;
+  billBackup = b.saved ? {pkg:JSON.parse(JSON.stringify(b.pkg)), itm:JSON.parse(JSON.stringify(b.itm))} : null;
+  render();
+}
+function curBill(){return db.bills.find(b=>b.id===billId);}
+function labelFor(b){return b.tableIds.map(id=>{const t=db.tables.find(x=>x.id===id);return t?t.label:'?';}).join('+');}
+function totals(b){
+  const total=db.packages.reduce((s,p)=>s+(b.pkg[p.id]||0)*p.price,0)+db.menu.reduce((s,m)=>s+(b.itm[m.id]||0)*m.price,0);
+  const heads=db.packages.reduce((s,p)=>s+(b.pkg[p.id]||0),0);
+  return {total,heads};
+}
+function viewBilling(){
+  const b=curBill(); if(!b)return''; const {total,heads}=totals(b); const grouped=b.tableIds.length>1;
+  return `<div class="overlay">
+    <header class="top"><div class="brand"><button class="ghost-ico" data-act="bill-exit" style="padding:8px">${I.back}</button>
+      <div><div class="shop">โต๊ะ ${esc(b.tableLabel)}${b.saved&&billEdited?' <span style="color:var(--red);font-size:12px;font-weight:700">*แก้ไข</span>':''}</div><div class="subhead">${heads} หัว · รับโดย ${esc(b.openedByName||'-')}</div></div></div></header>
+    <div class="content pad">
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <button class="iconbtn btn-sm" style="flex:1;justify-content:center" data-act="op-move">${I.swap} ย้าย</button>
+        <button class="iconbtn btn-sm" style="flex:1;justify-content:center" data-act="op-merge">${I.merge} รวมโต๊ะ</button>
+        ${grouped?`<button class="iconbtn btn-sm" style="flex:1;justify-content:center" data-act="op-split">แยกโต๊ะ</button>`:''}
+      </div>
+      <div class="sec">บุฟเฟต์ · จำนวนหัว</div>
+      <div class="card" style="padding:2px 18px;margin-bottom:18px">${db.packages.map(p=>lineRow(p.name,fmt(p.price)+' / หัว',b.pkg[p.id]||0,'pkg',p.id)).join('')}</div>
+      <div class="sec">เมนูสั่งเพิ่ม</div>
+      <div class="card" style="padding:2px 18px">${db.menu.map(m=>lineRow(m.name,esc(m.category)+' · '+fmt(m.price),b.itm[m.id]||0,'itm',m.id)).join('')}</div>
+    </div>
+    <div class="foot">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px">
+        <span class="muted" style="font-size:14px">รวมทั้งหมด</span><span style="font-size:28px;font-weight:700">${fmt(total)}</span></div>
+      ${!payStep?`<div style="display:flex;gap:10px">
+          <button class="btn ${b.saved?'btn-ghost':'btn-primary'}" style="flex:1" data-act="bill-close">${b.saved?'บันทึกไว้':'บันทึกออเดอร์'}</button>
+          ${b.saved?`<button class="btn btn-primary" style="flex:1.5" data-act="pay-start" ${total===0?'disabled':''}>${I.receipt} คิดเงิน</button>`:''}</div>
+        ${!b.saved?`<div class="muted" style="font-size:12.5px;text-align:center;margin-top:10px">บันทึกออเดอร์ก่อน แล้วเปิดโต๊ะอีกครั้งเพื่อคิดเงิน</div>`:''}`
+      :`<div class="muted" style="font-size:13px;margin-bottom:10px">รับเงินแบบไหน?</div>
+        <div style="display:flex;gap:8px"><button class="btn btn-primary btn-sm" style="flex:1" data-act="pay" data-m="cash">${I.cash} เงินสด</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" data-act="pay-qr" data-m="transfer">${I.qr} โอน</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" data-act="pay-qr" data-m="custom">${I.wallet} ${esc(db.settings.customName||'ช่องพิเศษ')}</button></div>
+        <button class="link" style="justify-content:center;width:100%;margin-top:12px" data-act="pay-cancel">ยกเลิก</button>`}
+    </div></div>`;
+}
+function lineRow(name,sub,qty,kind,id){
+  return `<div class="linerow"><div><div class="nm">${esc(name)}</div><div class="sb">${sub}</div></div>
+    <div class="ctrl"><button class="stepper" data-act="bq" data-kind="${kind}" data-id="${id}" data-d="-1">${I.minus}</button>
+      <span class="qty" style="${qty>0?'':'color:var(--muted)'}">${qty}</span>
+      <button class="stepper" data-act="bq" data-kind="${kind}" data-id="${id}" data-d="1">${I.plus}</button></div></div>`;
+}
+
+/* ---------- RECEIPT ---------- */
+function payLabel(m){return m==='cash'?'เงินสด':m==='transfer'?'โอน':(m==='custom'||m==='qr')?(db.settings.customName||'ช่องพิเศษ'):'';}
+function viewReceipt(){
+  const b=receipt;
+  return `<div class="overlay" style="overflow:auto">
+    <header class="top"><div class="brand"><span class="flame">✓</span><div class="shop">ชำระเงินแล้ว</div></div>
+      <button class="ghost-ico" data-act="receipt-done">${I.x}</button></header>
+    <div class="content"><div class="receipt">
+      <div class="rc-h"><div class="r1">🔥 ${esc(db.settings.shopName)}</div><div class="r2">ใบเสร็จรับเงิน · #${String(b.no).padStart(4,'0')}</div></div>
+      <div class="rc-line" style="color:var(--muted)"><span>โต๊ะ ${esc(b.tableLabel)}</span><span>${fmtDT(b.closedAt)}</span></div>
+      <div class="rc-line" style="color:var(--muted)"><span>พนักงาน</span><span>${esc(b.openedByName||'-')}</span></div>
+      <div class="rc-div"></div>
+      ${b.lines.map(l=>`<div class="rc-line"><span>${esc(l.name)}<span class="q">× ${l.qty}</span></span><span>${fmt(l.amount)}</span></div>`).join('')}
+      <div class="rc-div"></div>
+      <div class="rc-total"><span class="muted" style="font-size:14px">รวมทั้งหมด</span><span class="v">${fmt(b.total)}</span></div>
+      <div class="rc-line" style="color:var(--muted)"><span>ชำระโดย</span><span>${payLabel(b.paymentMethod)}</span></div>
+      <div class="rc-thanks">ขอบคุณที่ใช้บริการ</div></div></div>
+    <div class="foot"><div style="display:flex;gap:10px">
+      <button class="btn btn-ghost" style="flex:1" data-act="receipt-png">${I.download} บันทึกรูป</button>
+      <button class="btn btn-primary" style="flex:1" data-act="receipt-done">เสร็จ</button></div></div></div>`;
+}
+function receiptPNG(){
+  const b=receipt; const pad=28,W=460,lh=30; const H=210+b.lines.length*lh+120;
+  const cv=document.createElement('canvas'); cv.width=W*2; cv.height=H*2; const g=cv.getContext('2d'); g.scale(2,2);
+  g.fillStyle='#fff'; g.fillRect(0,0,W,H);
+  g.textAlign='center'; g.fillStyle='#1c1917'; g.font='700 20px sans-serif'; g.fillText('🔥 '+db.settings.shopName,W/2,48);
+  g.fillStyle='#9a938a'; g.font='13px sans-serif'; g.fillText('ใบเสร็จรับเงิน · #'+String(b.no).padStart(4,'0'),W/2,70);
+  g.font='12px sans-serif'; g.textAlign='left'; g.fillText('โต๊ะ '+b.tableLabel+' · '+(b.openedByName||''),pad,100);
+  g.textAlign='right'; g.fillText(fmtDT(b.closedAt),W-pad,100);
+  let y=126; g.strokeStyle='#ecebe7'; g.beginPath(); g.moveTo(pad,y); g.lineTo(W-pad,y); g.stroke(); y+=26;
+  g.fillStyle='#1c1917'; g.font='14px sans-serif';
+  b.lines.forEach(l=>{g.textAlign='left'; g.fillText(l.name+'  × '+l.qty,pad,y); g.textAlign='right'; g.fillText(fmt(l.amount),W-pad,y); y+=lh;});
+  g.strokeStyle='#ecebe7'; g.beginPath(); g.moveTo(pad,y-8); g.lineTo(W-pad,y-8); g.stroke(); y+=16;
+  g.textAlign='left'; g.fillStyle='#9a938a'; g.font='14px sans-serif'; g.fillText('รวมทั้งหมด',pad,y);
+  g.textAlign='right'; g.fillStyle='#1c1917'; g.font='700 24px sans-serif'; g.fillText(fmt(b.total),W-pad,y+4); y+=34;
+  g.textAlign='left'; g.fillStyle='#9a938a'; g.font='13px sans-serif'; g.fillText('ชำระโดย '+payLabel(b.paymentMethod),pad,y); y+=30;
+  g.textAlign='center'; g.fillText('ขอบคุณที่ใช้บริการ',W/2,y);
+  const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='ใบเสร็จ-'+String(b.no).padStart(4,'0')+'.png'; a.click();
+}
+
+/* ---------- SUMMARY (+ สถิติเชิงลึก) ---------- */
+function summaryData(){
+  const t=today(); const paid=db.bills.filter(b=>b.status==='paid');
+  const tb=paid.filter(b=>dateOf(b.closedAt)===t);
+  const sales=tb.reduce((s,b)=>s+(b.total||0),0), heads=tb.reduce((s,b)=>s+(b.heads||0),0);
+  const cash=tb.filter(b=>b.paymentMethod==='cash').reduce((s,b)=>s+b.total,0);
+  const transfer=tb.filter(b=>b.paymentMethod==='transfer').reduce((s,b)=>s+b.total,0);
+  const qr=tb.filter(b=>b.paymentMethod==='custom'||b.paymentMethod==='qr').reduce((s,b)=>s+b.total,0);
+  const days=[],wd=['อา','จ','อ','พ','พฤ','ศ','ส'];
+  for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);const ds=dstr(d);
+    days.push({lbl:wd[d.getDay()],val:paid.filter(b=>dateOf(b.closedAt)===ds).reduce((s,b)=>s+b.total,0),today:ds===t});}
+  // เมนูขายดี (รวมทุกวัน)
+  const pkgNames=new Set(db.packages.map(p=>p.name));
+  const soldMap={};
+  tb.forEach(b=>(b.lines||[]).forEach(l=>{if(l.kind==='pkg'||pkgNames.has(l.name))return;const s=soldMap[l.name]||{qty:0,amt:0};s.qty+=l.qty;s.amt+=l.amount;soldMap[l.name]=s;}));
+  const sold=Object.entries(soldMap).map(([name,v])=>({name,qty:v.qty,amt:v.amt})).sort((a,b)=>b.qty-a.qty);
+  // ช่วงเวลาพีค (รวมทุกวัน ตามชั่วโมง)
+  const hourMap={};
+  paid.forEach(b=>{const h=new Date(b.closedAt).getHours(); hourMap[h]=(hourMap[h]||0)+b.total;});
+  const peak=Object.entries(hourMap).map(([h,v])=>({h:+h,v})).sort((a,b)=>b.v-a.v).slice(0,3);
+  return {sales,heads,cash,transfer,qr,count:tb.length,days,sold,peak};
+}
+function viewSummary(){
+  const d=summaryData(); const max=Math.max(1,...d.days.map(x=>x.val));
+  return `<div class="pad gcols" style="padding-top:8px">
+    <div class="stat big" style="margin-bottom:12px"><div class="l">ยอดขายวันนี้</div><div class="v">${fmt(d.sales)}</div></div>
+    <div class="grid2" style="margin-bottom:12px">
+      <div class="stat"><div class="l">จำนวนบิล</div><div class="v">${d.count}</div></div>
+      <div class="stat"><div class="l">จำนวนหัว</div><div class="v">${d.heads}</div></div></div>
+    <div class="card" style="margin-bottom:12px"><div class="sec">ยอดขาย 7 วัน</div>
+      <div class="bars">${d.days.map(x=>`<div class="col"><div class="bar ${x.today?'today':''}" style="height:${Math.round(x.val/max*100)}%"></div><div class="lbl">${x.lbl}</div></div>`).join('')}</div></div>
+    <div class="card" style="margin-bottom:12px"><div class="sec">ช่องทางรับเงินวันนี้</div>
+      ${[['เงินสด',d.cash],['โอน',d.transfer],[(db.settings.customName||'ช่องพิเศษ'),d.qr]].map(([l,v])=>`<div style="display:flex;justify-content:space-between;font-size:14.5px;padding:6px 0"><span class="muted">${esc(l)}</span><span style="font-weight:600">${fmt(v)}</span></div>`).join('')}</div>
+    <div class="card" style="margin-bottom:12px"><div class="sec">เมนูที่ขายวันนี้</div>
+      ${d.sold.length?d.sold.map((x,i)=>`<div style="display:flex;justify-content:space-between;font-size:14.5px;padding:7px 0;${i<d.sold.length-1?'border-bottom:1px solid var(--line2)':''}"><span>${esc(x.name)}</span><span class="muted">${x.qty} · ${fmt(x.amt)}</span></div>`).join(''):`<div class="muted" style="font-size:13.5px">ยังไม่มีการขาย</div>`}</div>
+    <div class="card" style="margin-bottom:16px"><div class="sec">ช่วงเวลาขายดี</div>
+      ${d.peak.length?d.peak.map(x=>`<div style="display:flex;justify-content:space-between;font-size:14.5px;padding:7px 0"><span>${String(x.h).padStart(2,'0')}:00–${String(x.h+1).padStart(2,'0')}:00</span><span class="muted">${fmt(x.v)}</span></div>`).join(''):`<div class="muted" style="font-size:13.5px">ยังไม่มีข้อมูล</div>`}</div>
+    <div>
+      ${(()=>{const co=db.closeouts.find(c=>c.date===today());return co?`<div class="card" style="margin-bottom:12px;border-color:var(--green);background:var(--greenBg)"><div style="font-size:14.5px;font-weight:600;color:var(--green)">✓ ปิดร้านแล้ว</div><div class="muted" style="font-size:12.5px;margin-top:3px">เวลา ${hhmm(co.at)} · โดย ${esc(co.staffName)} · ยอด ${fmt(co.sales)}</div></div>`:'';})()}
+      <button class="btn btn-primary" style="margin-bottom:10px" data-act="closeday">${I.check} ปิดร้านวันนี้</button>
+      <button class="btn btn-ghost" data-act="sum-png">${I.download} บันทึกภาพสรุปวันนี้</button>
+    </div></div>`;
+}
+function closeDay(){const d=summaryData(); const t=today();
+  db.closeouts=db.closeouts.filter(c=>c.date!==t);
+  db.closeouts.push({id:uid(),date:t,at:new Date().toISOString(),staffName:session.name,sales:d.sales,count:d.count,heads:d.heads,cash:d.cash,transfer:d.transfer,custom:d.qr});
+  modal=null;save();render();}
+function summaryPNG(){
+  const d=summaryData(); const cv=document.createElement('canvas'); cv.width=620;cv.height=360; const g=cv.getContext('2d');
+  g.fillStyle='#fff'; g.fillRect(0,0,620,360);
+  g.fillStyle='#1c1917'; g.font='700 24px sans-serif'; g.fillText('🔥 '+db.settings.shopName,28,48);
+  g.fillStyle='#9a938a'; g.font='15px sans-serif'; g.fillText('สรุปยอดวันนี้ · '+today(),28,74);
+  const rows=[['ยอดขาย',fmt(d.sales)],['จำนวนบิล',d.count+' บิล'],['จำนวนหัว',d.heads+' หัว'],['เงินสด',fmt(d.cash)],['โอน / ช่องอื่น',fmt(d.transfer+d.qr)]];
+  rows.forEach((r,i)=>{const y=126+i*44; g.textAlign='left';g.fillStyle='#9a938a';g.font='16px sans-serif';g.fillText(r[0],28,y);
+    g.textAlign='right';g.fillStyle='#1c1917';g.font='700 19px sans-serif';g.fillText(r[1],592,y);});
+  const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='สรุป-'+today()+'.png'; a.click();
+}
+
+/* ---------- DASHBOARD ---------- */
+function dashData(){
+  const paid=db.bills.filter(b=>b.status==='paid');
+  const open=db.bills.filter(b=>b.status==='open');
+  const t=today(); const yd=(()=>{const d=new Date();d.setDate(d.getDate()-1);return dstr(d);})();
+  const sumOn=ds=>paid.filter(b=>dateOf(b.closedAt)===ds).reduce((s,b)=>s+b.total,0);
+  const cntOn=ds=>paid.filter(b=>dateOf(b.closedAt)===ds).length;
+  const headOn=ds=>paid.filter(b=>dateOf(b.closedAt)===ds).reduce((s,b)=>s+(b.heads||0),0);
+  const todaySales=sumOn(t), ydSales=sumOn(yd), todayBills=cntOn(t), todayHeads=headOn(t);
+  const ym=t.slice(0,7); const mb=paid.filter(b=>dateOf(b.closedAt).slice(0,7)===ym);
+  const monthSales=mb.reduce((s,b)=>s+b.total,0), monthBills=mb.length, monthHeads=mb.reduce((s,b)=>s+(b.heads||0),0);
+  const tc={available:0,occupied:0,billing:0,reserved:0}; db.tables.forEach(x=>{tc[x.status]=(tc[x.status]||0)+1;});
+  const totalT=db.tables.length||1;
+  const occPct=Math.round((tc.occupied+tc.billing)/totalT*100);
+  const seatedHeads=open.reduce((s,b)=>s+totals(b).heads,0);
+  const openValue=open.reduce((s,b)=>s+totals(b).total,0);
+  const resvToday=db.reservations.filter(r=>r.status==='booked'&&r.date===t).length;
+  const hours=Array(24).fill(0); paid.forEach(b=>{hours[new Date(b.closedAt).getHours()]+=b.total;});
+  const pkgN=new Set(db.packages.map(p=>p.name)); const menuMap={};
+  paid.forEach(b=>(b.lines||[]).forEach(l=>{if(l.kind==='pkg'||pkgN.has(l.name))return;const s=menuMap[l.name]||{qty:0,amt:0};s.qty+=l.qty;s.amt+=l.amount;menuMap[l.name]=s;}));
+  const menuTop=Object.entries(menuMap).map(([name,v])=>({name,qty:v.qty,amt:v.amt})).sort((a,b)=>b.qty-a.qty).slice(0,10);
+  const pm={cash:0,transfer:0,custom:0}; paid.forEach(b=>{const k=b.paymentMethod==='qr'?'custom':b.paymentMethod; if(pm[k]!=null)pm[k]+=b.total;});
+  const pmTotal=(pm.cash+pm.transfer+pm.custom)||1;
+  const closeouts=db.closeouts.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,14);
+  return {todaySales,ydSales,todayBills,todayHeads,monthSales,monthBills,monthHeads,tc,totalT,occPct,seatedHeads,openValue,resvToday,hours,menuTop,pm,pmTotal,closeouts,
+    avgBill:todayBills?todaySales/todayBills:0, avgHead:todayHeads?todaySales/todayHeads:0};
+}
+function chartData(range){
+  const paid=db.bills.filter(b=>b.status==='paid'); const arr=[];
+  if(range==='12m'){for(let i=11;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    arr.push({lbl:String(d.getMonth()+1),key:ym,val:paid.filter(b=>dateOf(b.closedAt).slice(0,7)===ym).reduce((s,b)=>s+b.total,0),cur:i===0});}}
+  else {const n=range==='7d'?7:30;for(let i=n-1;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);const ds=dstr(d);
+    arr.push({lbl:String(d.getDate()),key:ds,val:paid.filter(b=>dateOf(b.closedAt)===ds).reduce((s,b)=>s+b.total,0),cur:i===0});}}
+  return arr;
+}
+function pctBadge(a,b){const p=b?Math.round((a-b)/b*100):(a>0?100:0); const up=p>=0;
+  return `<span style="font-size:13px;font-weight:600;color:${up?'var(--green)':'var(--red)'}">${up?'▲':'▼'} ${Math.abs(p)}%</span>`;}
+function viewDashboard(){
+  const d=dashData(); const ch=chartData(dashRange); const cmax=Math.max(1,...ch.map(x=>x.val)); const hmax=Math.max(1,...d.hours);
+  const cn=ch.length; const gap=cn>12?'2px':(cn>7?'4px':'9px');
+  const chip=(l,n,c)=>`<div style="flex:1;min-width:66px;text-align:center;padding:12px 6px;border-radius:12px;background:var(--${c}Bg)"><div style="font-size:22px;font-weight:700;color:var(--${c})">${n}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${l}</div></div>`;
+  const mini=(l,v)=>`<div style="display:flex;justify-content:space-between;font-size:13.5px;padding:5px 0"><span class="muted">${l}</span><span style="font-weight:600">${v}</span></div>`;
+  return `<div class="pad gcols" style="padding-top:8px">
+    <div class="card"><div class="sec">สถานะตอนนี้</div>
+      <div style="display:flex;gap:8px;margin-bottom:14px">${chip('ว่าง',d.tc.available,'green')}${chip('มีคน',d.tc.occupied,'red')}${chip('รอเคลียร์',d.tc.billing,'amber')}${chip('จอง',d.tc.reserved,'blue')}</div>
+      ${mini('ที่นั่งไม่ว่าง',d.occPct+'%')}${mini('ลูกค้ากำลังนั่ง',d.seatedHeads+' หัว')}${mini('ยอดค้างในโต๊ะ',fmt(d.openValue))}${mini('จองวันนี้',d.resvToday+' โต๊ะ')}</div>
+
+    <div class="card"><div class="sec">วันนี้เทียบเมื่อวาน</div>
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px"><span style="font-size:30px;font-weight:700">${fmt(d.todaySales)}</span>${pctBadge(d.todaySales,d.ydSales)}</div>
+      <div class="muted" style="font-size:12.5px;margin-bottom:10px">เมื่อวาน ${fmt(d.ydSales)}</div>
+      ${mini('จำนวนบิลวันนี้',d.todayBills)}${mini('จำนวนหัววันนี้',d.todayHeads)}${mini('เฉลี่ยต่อบิล',fmt(Math.round(d.avgBill)))}${mini('เฉลี่ยต่อหัว',fmt(Math.round(d.avgHead)))}</div>
+
+    <div class="card"><div class="sec">ภาพรวมเดือนนี้</div>
+      <div style="font-size:30px;font-weight:700;margin-bottom:10px">${fmt(d.monthSales)}</div>
+      ${mini('จำนวนบิล',d.monthBills)}${mini('จำนวนหัว',d.monthHeads)}${mini('เฉลี่ยต่อบิล',fmt(d.monthBills?Math.round(d.monthSales/d.monthBills):0))}</div>
+
+    <div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="sec" style="margin:0">ยอดขายย้อนหลัง</div>
+        <div class="seg" style="padding:2px">${[['7d','7 วัน'],['30d','30 วัน'],['12m','12 เดือน']].map(([r,l])=>`<button class="${dashRange===r?'on':''}" data-act="dashrange" data-r="${r}" style="padding:6px 10px;font-size:12.5px">${l}</button>`).join('')}</div></div>
+      <div class="bars" style="gap:${gap}">${ch.map((x,i)=>`<div class="col" data-act="drill" data-mode="${dashRange==='12m'?'month':'day'}" data-k="${x.key}" style="cursor:pointer"><div class="bar ${x.cur?'today':''}" style="height:${Math.round(x.val/cmax*100)}%"></div><div class="lbl" style="font-size:9.5px">${(dashRange==='30d'&&i%5!==0&&i!==cn-1)?'':x.lbl}</div></div>`).join('')}</div>
+      <div class="muted" style="font-size:11.5px;text-align:center;margin-top:8px">แตะแท่งเพื่อดูรายละเอียด</div>
+      ${dashRange==='12m'?`<button class="btn btn-ghost btn-sm" style="margin-top:10px" data-act="yearpng">${I.download} บันทึกภาพสรุปปี</button>`:''}</div>
+
+    <div class="card"><div class="sec">เมนูขายดีสะสม</div>
+      ${d.menuTop.length?d.menuTop.map((x,i)=>`<div style="display:flex;justify-content:space-between;font-size:14px;padding:6px 0;${i<d.menuTop.length-1?'border-bottom:1px solid var(--line2)':''}"><span>${i+1}. ${esc(x.name)}</span><span class="muted">${x.qty} · ${fmt(x.amt)}</span></div>`).join(''):`<div class="muted" style="font-size:13.5px">ยังไม่มีข้อมูล</div>`}</div>
+
+    <div class="card"><div class="sec">สัดส่วนช่องทางจ่าย</div>
+      <div style="display:flex;height:10px;border-radius:6px;overflow:hidden;margin-bottom:12px;background:var(--line2)">
+        <div style="width:${d.pm.cash/d.pmTotal*100}%;background:var(--green)"></div>
+        <div style="width:${d.pm.transfer/d.pmTotal*100}%;background:var(--ink)"></div>
+        <div style="width:${d.pm.custom/d.pmTotal*100}%;background:var(--amber)"></div></div>
+      ${[['เงินสด',d.pm.cash,'--green'],['โอน',d.pm.transfer,'--ink'],[(db.settings.customName||'ช่องพิเศษ'),d.pm.custom,'--amber']].map(([l,v,c])=>`<div style="display:flex;justify-content:space-between;font-size:13.5px;padding:5px 0"><span style="display:flex;align-items:center;gap:7px"><i class="dot" style="background:var(${c})"></i>${esc(l)}</span><span style="font-weight:600">${fmt(v)} · ${Math.round(v/d.pmTotal*100)}%</span></div>`).join('')}</div>
+
+    <div class="card"><div class="sec">ประวัติปิดร้านย้อนหลัง</div>
+      ${d.closeouts.length?d.closeouts.map(c=>`<div class="listrow"><div><div style="font-size:14px;font-weight:500">${esc(c.date)}</div><div class="muted" style="font-size:12px;margin-top:2px">ปิด ${hhmm(c.at)} · ${esc(c.staffName)}</div></div><div style="font-weight:700">${fmt(c.sales)}</div></div>`).join(''):`<div class="muted" style="font-size:13.5px">ยังไม่มีการปิดร้าน</div>`}</div>
+  </div>`;
+}
+
+function periodData(mode,key){
+  const paid=db.bills.filter(b=>b.status==='paid');
+  const match=b=>mode==='month'?dateOf(b.closedAt).slice(0,7)===key:dateOf(b.closedAt)===key;
+  const bills=paid.filter(match);
+  const sales=bills.reduce((s,b)=>s+b.total,0),count=bills.length,heads=bills.reduce((s,b)=>s+(b.heads||0),0);
+  const pm={cash:0,transfer:0,custom:0};bills.forEach(b=>{const k=b.paymentMethod==='qr'?'custom':b.paymentMethod;if(pm[k]!=null)pm[k]+=b.total;});
+  const pkgN=new Set(db.packages.map(p=>p.name));const mm={};
+  bills.forEach(b=>(b.lines||[]).forEach(l=>{if(l.kind==='pkg'||pkgN.has(l.name))return;const s=mm[l.name]||{qty:0,amt:0};s.qty+=l.qty;s.amt+=l.amount;mm[l.name]=s;}));
+  const menu=Object.entries(mm).map(([name,v])=>({name,qty:v.qty,amt:v.amt})).sort((a,b)=>b.qty-a.qty);
+  return {sales,count,heads,pm,menu};
+}
+function monthLabel(ym){const p=ym.split('-');return TH_MON[+p[1]-1]+' '+(+p[0]+543);}
+function dayLabel(ds){const d=new Date(ds+'T00:00:00');return d.getDate()+' '+TH_MON[d.getMonth()]+' '+(d.getFullYear()+543);}
+function drawReport(title,rows){
+  const H=112+rows.length*38;const cv=document.createElement('canvas');cv.width=620;cv.height=H;const g=cv.getContext('2d');
+  g.fillStyle='#fff';g.fillRect(0,0,620,H);
+  g.fillStyle='#1c1917';g.font='700 24px sans-serif';g.textAlign='left';g.fillText('🔥 '+db.settings.shopName,28,46);
+  g.fillStyle='#9a938a';g.font='15px sans-serif';g.fillText(title,28,72);
+  rows.forEach((r,i)=>{const y=108+i*38;g.textAlign='left';g.fillStyle='#9a938a';g.font='16px sans-serif';g.fillText(r[0],28,y);
+    g.textAlign='right';g.fillStyle='#1c1917';g.font='700 18px sans-serif';g.fillText(r[1],592,y);});
+  const a=document.createElement('a');a.href=cv.toDataURL('image/png');a.download=title+'.png';a.click();
+}
+function periodPNG(mode,key){const p=periodData(mode,key);
+  const rows=[['ยอดขาย',fmt(p.sales)],['จำนวนบิล',p.count+' บิล'],['จำนวนหัว',p.heads+' หัว'],['เฉลี่ยต่อบิล',fmt(p.count?Math.round(p.sales/p.count):0)],
+    ['— ช่องทางจ่าย —',''],['  เงินสด',fmt(p.pm.cash)],['  โอน',fmt(p.pm.transfer)],['  '+(db.settings.customName||'ช่องพิเศษ'),fmt(p.pm.custom)]];
+  if(p.menu.length){rows.push(['— เมนูที่ขาย —','']); p.menu.slice(0,15).forEach(x=>rows.push(['  '+x.name,x.qty+' · '+fmt(x.amt)]));}
+  drawReport(mode==='month'?'สรุปเดือน '+monthLabel(key):'สรุป '+dayLabel(key), rows);}
+function yearPNG(){const ch=chartData('12m');const total=ch.reduce((s,x)=>s+x.val,0);
+  drawReport('สรุปรายปี '+(new Date().getFullYear()+543),[...ch.map(x=>['เดือน '+x.lbl,fmt(x.val)]),['รวมทั้งปี',fmt(total)]]);}
+
+/* ---------- MORE MENU ---------- */
+function viewMore(){
+  const owner=session.role==='owner';
+  const items=[['reservations',I.cal,'จองโต๊ะ','จัดการการจองล่วงหน้า',true]];
+  if(owner)items.push(['log',I.list,'ประวัติบิล','บิลวันนี้ · แก้ไข/ยกเลิก · log',true]);
+  return `<div class="pad gcols" style="padding-top:8px">
+    ${items.map(([id,ic,t,d])=>`<button class="menucard" data-act="overlay" data-ov="${id}">
+      <div class="ic">${ic}</div><div><div class="t">${t}</div><div class="d">${d}</div></div><div class="arr">${I.back.replace('19" y1="12" x2="5','5" y1="12" x2="19').replace('12 19 5 12 12 5','12 5 19 12 12 19')}</div></button>`).join('')}
+  </div>`;
+}
+
+/* ---------- OVERLAYS (จอง / ลิ้นชัก / log / เวลางาน) ---------- */
+function viewOverlay(){
+  const map={reservations:['จองโต๊ะ',viewResv],log:['ประวัติบิล',viewLog]};
+  const [title,fn]=map[overlay]; 
+  return `<div class="overlay">
+    <header class="top"><div class="brand"><button class="ghost-ico" data-act="overlay-close" style="padding:8px">${I.back}</button>
+      <div class="shop">${title}</div></div></header>
+    <div class="content">${fn()}</div></div>`;
+}
+function viewResv(){
+  const list=db.reservations.filter(r=>r.status==='booked').sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+  return `<div class="pad gcols">
+    <button class="btn btn-primary" style="margin-bottom:16px;grid-column:1/-1" data-act="resv-new">${I.plus} จองโต๊ะใหม่</button>
+    ${list.length===0?`<div class="center">ยังไม่มีการจอง</div>`:list.map(r=>`<div class="card" style="margin-bottom:11px">
+      <div style="display:flex;justify-content:space-between;align-items:start"><div>
+        <div style="font-size:15px;font-weight:600">${esc(r.name)} · ${r.people} คน</div>
+        <div class="muted" style="font-size:12.5px;margin-top:3px">${esc(r.date)} ${esc(r.time)}${r.tableId?' · โต๊ะ '+esc((db.tables.find(t=>t.id===r.tableId)||{}).label||'?'):''}${r.phone?' · '+esc(r.phone):''}</div>
+        ${r.note?`<div class="muted" style="font-size:12.5px;margin-top:2px">${esc(r.note)}</div>`:''}</div></div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="iconbtn btn-sm" style="flex:1;justify-content:center;color:var(--green);border-color:var(--green)" data-act="resv-seat" data-id="${r.id}">${I.check} รับเข้านั่ง</button>
+        <button class="iconbtn btn-sm" style="justify-content:center;color:var(--red)" data-act="resv-cancel" data-id="${r.id}">ยกเลิก</button></div></div>`).join('')}
+  </div>`;
+}
+function viewBillDetail(){
+  const b=db.bills.find(x=>x.id===billView); if(!b)return'';
+  const no='#'+String(b.no||0).padStart(4,'0');
+  return `<div class="overlay" style="overflow:auto">
+    <header class="top"><div class="brand"><button class="ghost-ico" data-act="billview-close" style="padding:8px">${I.back}</button>
+      <div class="shop">บิล ${no} ${b.status==='void'?'<span style="color:var(--red);font-size:12px">(ยกเลิก)</span>':''}</div></div></header>
+    <div class="content">
+      <div class="receipt">
+        <div class="rc-h"><div class="r1">🔥 ${esc(db.settings.shopName)}</div><div class="r2">บิล ${no}</div></div>
+        <div class="rc-line" style="color:var(--muted)"><span>โต๊ะ ${esc(b.tableLabel)}</span><span>${fmtDT(b.closedAt||b.openedAt)}</span></div>
+        <div class="rc-line" style="color:var(--muted)"><span>พนักงาน</span><span>${esc(b.openedByName||'-')}</span></div>
+        <div class="rc-div"></div>
+        ${(b.lines&&b.lines.length)?b.lines.map(l=>`<div class="rc-line"><span>${esc(l.name)}<span class="q">× ${l.qty}</span></span><span>${fmt(l.amount)}</span></div>`).join(''):`<div class="muted" style="font-size:13px">ไม่มีรายการ</div>`}
+        <div class="rc-div"></div>
+        <div class="rc-total"><span class="muted" style="font-size:14px">รวมทั้งหมด</span><span class="v">${fmt(b.total)}</span></div>
+        <div class="rc-line" style="color:var(--muted)"><span>ชำระโดย</span><span>${payLabel(b.paymentMethod)}</span></div>
+      </div>
+      <div class="pad" style="padding-top:0">
+        <div class="sec">ประวัติการแก้ไข</div>
+        ${(()=>{const h=(b.history||[]).filter(x=>x.action!=='บันทึกออเดอร์'&&x.action!=='คิดเงิน');
+          return h.length?h.slice().reverse().map(x=>`<div class="listrow"><div>
+          <div style="font-size:14px;font-weight:500">${esc(x.action)}${x.detail?' · '+esc(x.detail):''}</div>
+          <div class="muted" style="font-size:12px;margin-top:2px">${fmtDT(x.at)} · ${esc(x.staffName)}</div></div></div>`).join(''):`<div class="muted" style="font-size:13.5px">ยังไม่มีการแก้ไข</div>`;})()}
+      </div>
+    </div>
+    ${b.status==='paid'?`<div class="foot">
+      <button class="btn btn-ghost" style="margin-bottom:10px" data-act="bill-reopen" data-id="${b.id}">${I.edit} แก้ไขบิล</button>
+      <button class="btn-danger" data-act="bill-void" data-id="${b.id}">${I.trash} ยกเลิกบิล</button></div>`:''}
+  </div>`;
+}
+function cashData(){
+  const t=today();
+  const salesCash=db.bills.filter(b=>b.status==='paid'&&dateOf(b.closedAt)===t&&b.paymentMethod==='cash').reduce((s,b)=>s+b.total,0);
+  const cin=db.cash.filter(c=>c.type==='in'&&dateOf(c.at)===t).reduce((s,c)=>s+c.amount,0);
+  const cout=db.cash.filter(c=>c.type==='out'&&dateOf(c.at)===t).reduce((s,c)=>s+c.amount,0);
+  return {salesCash,cin,cout,expected:salesCash+cin-cout};
+}
+function viewCash(){
+  const d=cashData(); const t=today();
+  const moves=db.cash.filter(c=>dateOf(c.at)===t);
+  const co=db.closeouts.find(c=>c.date===t);
+  return `<div class="pad">
+    <div class="stat big" style="margin-bottom:12px"><div class="l">เงินสดที่ควรมีในลิ้นชักตอนนี้</div><div class="v">${fmt(d.expected)}</div>
+      <div class="muted" style="font-size:12px;margin-top:8px">ขายเงินสด ${fmt(d.salesCash)} + เงินเข้า ${fmt(d.cin)} − เงินออก ${fmt(d.cout)}</div></div>
+    <div style="display:flex;gap:10px;margin-bottom:16px">
+      <button class="btn btn-ghost btn-sm" style="flex:1" data-act="cash-move" data-t="in">${I.plus} เงินเข้า</button>
+      <button class="btn btn-ghost btn-sm" style="flex:1" data-act="cash-move" data-t="out">${I.minus} เงินออก</button></div>
+    <div class="card" style="margin-bottom:16px"><div class="sec">นับเงินปิดร้าน</div>
+      ${co?`<div style="font-size:14.5px">นับได้ ${fmt(co.counted)} · ระบบ ${fmt(co.expected)}
+        <div style="margin-top:6px;font-weight:600;color:${co.diff===0?'var(--green)':'var(--red)'}">ส่วนต่าง ${co.diff>0?'+':''}${fmt(co.diff)}</div></div>`
+      :`<button class="btn btn-primary btn-sm" data-act="closeout">นับเงิน & ปิดร้านวันนี้</button>`}</div>
+    <div class="sec">รายการวันนี้</div>
+    ${moves.length===0?`<div class="muted" style="font-size:13.5px">ยังไม่มีรายการเงินเข้า-ออก</div>`:moves.map(c=>`<div class="listrow"><div>
+      <div style="font-size:14.5px;font-weight:500;color:${c.type==='in'?'var(--green)':'var(--red)'}">${c.type==='in'?'เงินเข้า':'เงินออก'} ${fmt(c.amount)}</div>
+      <div class="muted" style="font-size:12px;margin-top:2px">${hhmm(c.at)} · ${esc(c.note||'-')} · ${esc(c.staffName)}</div></div></div>`).join('')}
+  </div>`;
+}
+function viewLog(){
+  const t=today();
+  const bills=db.bills.filter(b=>b.no&&dateOf(b.closedAt||b.openedAt)===t).sort((a,b)=>(b.no||0)-(a.no||0));
+  return `<div class="pad">
+    <div class="sec">บิลวันนี้</div>
+    ${bills.length===0?`<div class="muted" style="font-size:13.5px;margin-bottom:18px">ยังไม่มีบิล</div>`:bills.map(b=>`<button class="card" data-act="bill-view" data-id="${b.id}" style="width:100%;text-align:left;margin-bottom:10px;padding:14px 16px;border:1px solid var(--line);background:var(--surface)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><div style="font-size:14.5px;font-weight:600">#${String(b.no).padStart(4,'0')} · โต๊ะ ${esc(b.tableLabel)} ${b.status==='void'?'<span style="color:var(--red)">(ยกเลิก)</span>':''}</div>
+        <div class="muted" style="font-size:12px;margin-top:2px">${hhmm(b.closedAt||b.openedAt)} · ${payLabel(b.paymentMethod||'')} · ${esc(b.openedByName||'')}</div></div>
+        <div style="text-align:right"><div style="font-weight:700">${fmt(b.total)}</div><div class="muted" style="font-size:12px;margin-top:2px">ดูบิล ›</div></div></div></button>`).join('')}
+  </div>`;
+}
+function viewWork(){
+  const owner=session.role==='owner'; const t=today();
+  const shifts=db.shifts.filter(s=>dateOf(s.inAt)===t && (owner||s.staffId===session.id)).sort((a,b)=>(b.inAt).localeCompare(a.inAt));
+  return `<div class="pad">
+    ${!owner?`<div class="stat big" style="margin-bottom:16px"><div class="l">สถานะของคุณ</div>
+      <div class="v" style="font-size:20px">${db.shifts.some(s=>s.staffId===session.id&&!s.outAt)?'กำลังทำงาน':'ยังไม่เข้างาน'}</div>
+      <div class="muted" style="font-size:12px;margin-top:8px">ลงเวลาอัตโนมัติตอนเข้า/ออกระบบ</div></div>`:''}
+    <div class="sec">เวลาทำงานวันนี้</div>
+    ${shifts.length===0?`<div class="muted" style="font-size:13.5px">ยังไม่มีข้อมูล</div>`:shifts.map(s=>`<div class="listrow"><div>
+      <div style="font-size:14.5px;font-weight:500">${esc(s.staffName)}</div>
+      <div class="muted" style="font-size:12px;margin-top:2px">เข้า ${hhmm(s.inAt)}${s.outAt?' · ออก '+hhmm(s.outAt):' · กำลังทำงาน'}</div></div>
+      <div class="muted" style="font-size:13px">${s.outAt?dur(s.inAt,s.outAt):''}</div></div>`).join('')}
+  </div>`;
+}
+
+/* ---------- SETTINGS ---------- */
+function viewSettings(){
+  return `<div class="pad gcols" style="padding-top:8px">
+    <div class="card" style="margin-bottom:14px"><div class="sec">ชื่อร้าน</div>
+      <input class="input" data-field="shopname" value="${esc(db.settings.shopName)}"></div>
+    <div class="card" style="margin-bottom:14px"><div class="sec">ช่องทางโอน — รูป QR</div>
+      <div class="muted" style="font-size:12.5px;margin-bottom:10px">แนบรูป QR ให้ลูกค้าสแกน (จะเด้งขึ้นตอนกด “โอน”)</div>
+      ${db.settings.transferQR?`<img src="${db.settings.transferQR}" style="width:120px;height:120px;object-fit:cover;border-radius:12px;border:1px solid var(--line);display:block;margin-bottom:10px">`:''}
+      <div style="display:flex;gap:10px">
+        <label class="btn btn-ghost btn-sm" style="flex:1">${db.settings.transferQR?'เปลี่ยนรูป':'แนบรูป QR'}<input type="file" accept="image/*" data-img="transferQR" style="display:none"></label>
+        ${db.settings.transferQR?`<button class="btn-danger btn-sm" style="width:auto;padding:10px 14px" data-act="img-del" data-img="transferQR">${I.trash}</button>`:''}</div></div>
+    <div class="card" style="margin-bottom:14px"><div class="sec">ช่องพิเศษ</div>
+      <div class="muted" style="font-size:12.5px;margin-bottom:8px">ตั้งชื่อช่องทางเอง + แนบรูป (เด้งขึ้นตอนกดเลือกช่องนี้)</div>
+      <input class="input" data-field="customname" placeholder="ชื่อช่อง เช่น QR ร้าน / เครดิต" value="${esc(db.settings.customName||'')}" style="margin-bottom:10px">
+      ${db.settings.customImg?`<img src="${db.settings.customImg}" style="width:120px;height:120px;object-fit:cover;border-radius:12px;border:1px solid var(--line);display:block;margin-bottom:10px">`:''}
+      <div style="display:flex;gap:10px">
+        <label class="btn btn-ghost btn-sm" style="flex:1">${db.settings.customImg?'เปลี่ยนรูป':'แนบรูป'}<input type="file" accept="image/*" data-img="customImg" style="display:none"></label>
+        ${db.settings.customImg?`<button class="btn-danger btn-sm" style="width:auto;padding:10px 14px" data-act="img-del" data-img="customImg">${I.trash}</button>`:''}</div></div>
+    <div class="card" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+      <div><div style="font-size:15px;font-weight:600">จัดผังโต๊ะ</div><div class="muted" style="font-size:12.5px;margin-top:3px">${db.tables.length} โต๊ะ · ลากจัด เพิ่ม/ลบ</div></div>
+      <button class="iconbtn" data-act="editor-open">${I.edit} จัดผัง</button></div>
+    <div class="card" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+      <div><div style="font-size:15px;font-weight:600">ผังร้าน (MAP)</div><div class="muted" style="font-size:12.5px;margin-top:3px">${(db.mapItems||[]).length} วัตถุ · วาดผังร้านด้วยรูปทรง</div></div>
+      <button class="iconbtn" data-act="map-open">${I.edit} วาดผัง</button></div>
+    ${editList('แพ็กเกจบุฟเฟต์','packages',p=>`${esc(p.name)} · ${fmt(p.price)}`)}
+    ${editList('เมนูสั่งเพิ่ม','menu',m=>`${esc(m.name)} · ${fmt(m.price)}`)}
+    ${editList('พนักงาน','staff',s=>`${esc(s.name)} · ${s.role==='owner'?'เจ้าของ':'พนักงาน'}`,true)}</div>`;
+}
+function editList(title,key,render,protect){
+  return `<div class="card" style="margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div class="sec" style="margin:0">${title}</div>
+      <button class="link" style="color:var(--ink);font-weight:600" data-act="edit-new" data-list="${key}">${I.plus} เพิ่ม</button></div>
+    ${db[key].map((it,idx)=>`<div class="listrow"><span style="font-size:14.5px">${render(it)}</span>
+      <div style="display:flex;gap:8px"><button class="iconbtn" data-act="edit-item" data-list="${key}" data-id="${it.id}">แก้</button>
+      ${protect&&idx===0?'':`<button class="iconbtn" style="color:var(--red)" data-act="edit-del" data-list="${key}" data-id="${it.id}">${I.trash}</button>`}</div></div>`).join('')}</div>`;
+}
+const LIST_FIELDS={packages:[['name','ชื่อ','text'],['price','ราคา/หัว','number']],
+  menu:[['name','ชื่อ','text'],['price','ราคา','number'],['category','หมวด','text']],
+  staff:[['name','ชื่อ','text'],['pin','PIN','text']]};
+
+/* ---------- TABLE EDITOR ---------- */
+function viewEditor(){
+  const t=db.tables.find(x=>x.id===editSel);
+  return `<div class="overlay">
+    <header class="top"><div class="brand"><button class="ghost-ico" data-act="editor-close" style="padding:8px">${I.back}</button>
+      <div class="shop">จัดผังโต๊ะ</div></div></header>
+    <div class="legend" style="padding-bottom:8px"><span>${I.edit} ลากจัดตำแหน่ง · แตะเพื่อแก้ไข</span></div>
+    <div class="tsearch" style="padding-top:0"><input id="tsearch" inputmode="numeric" placeholder="ค้นหาโต๊ะ… (พิมพ์เลขโต๊ะ)"><button data-act="table-search">${I.grid}</button></div>
+    <div class="canvas edit" id="ecanvas" style="flex:1;margin:0 16px 12px"><div class="plane" id="eplane" style="width:${planeSize().w}px;height:${planeSize().h}px">${db.tables.map(t=>tableEl(t,true)).join('')}
+      ${db.tables.length===0?`<div class="center" style="position:absolute;inset:0">กด “เพิ่มโต๊ะ” แล้วลากไปวาง</div>`:''}</div></div>
+    ${!t?`<div class="foot"><button class="btn btn-primary" data-act="etable-add">${I.plus} เพิ่มโต๊ะ</button></div>`
+    :`<div class="foot" style="background:var(--surface)">
+      <div style="display:flex;justify-content:space-between;margin-bottom:14px"><span class="muted" style="font-size:13px">แก้โต๊ะ ${esc(t.label)}</span>
+        <button class="link" data-act="etable-done">${I.check} เสร็จ</button></div>
+      <div class="row"><label>ชื่อโต๊ะ</label><input class="input" data-field="etlabel" value="${esc(t.label)}"></div>
+      <div class="row"><label>ที่นั่ง</label><button class="stepper" data-act="eseat" data-d="-1">${I.minus}</button>
+        <span class="qty">${t.seats}</span><button class="stepper" data-act="eseat" data-d="1">${I.plus}</button></div>
+      <button class="btn-danger" data-act="etable-del">${I.trash} ลบโต๊ะนี้</button></div>`}</div>`;
+}
+
+/* ---------- MODAL / SHEETS ---------- */
+function sheetHead(title){return `<h3>${title}<button style="border:none;background:transparent;color:var(--muted)" data-act="modal-close">${I.x}</button></h3>`;}
+function viewModal(){
+  const m=modal;
+  if(m.type==='drill'){const p=periodData(m.mode,m.key); const title=m.mode==='month'?'เดือน '+monthLabel(m.key):dayLabel(m.key);
+    const line=(l,v)=>`<div style="display:flex;justify-content:space-between;font-size:14px;padding:6px 0"><span class="muted">${esc(l)}</span><span style="font-weight:600">${v}</span></div>`;
+    return sheet(sheetHead(title)
+      +`<div style="font-size:30px;font-weight:700;margin-bottom:12px">${fmt(p.sales)}</div>`
+      +line('จำนวนบิล',p.count+' บิล')+line('จำนวนหัว',p.heads+' หัว')+line('เฉลี่ยต่อบิล',fmt(p.count?Math.round(p.sales/p.count):0))
+      +`<div class="rc-div"></div>`
+      +line('เงินสด',fmt(p.pm.cash))+line('โอน',fmt(p.pm.transfer))+line((db.settings.customName||'ช่องพิเศษ'),fmt(p.pm.custom))
+      +(p.menu.length?`<div class="rc-div"></div><div class="sec" style="margin-bottom:8px">เมนูที่ขาย</div>`+p.menu.slice(0,10).map(x=>`<div style="display:flex;justify-content:space-between;font-size:13.5px;padding:5px 0"><span>${esc(x.name)}</span><span class="muted">${x.qty} · ${fmt(x.amt)}</span></div>`).join(''):'')
+      +`<button class="btn btn-primary" style="margin-top:16px" data-act="periodpng" data-mode="${m.mode}" data-k="${m.key}">${I.download} บันทึกภาพ</button>`);
+  }
+  if(m.type==='exitconfirm'){
+    return sheet(sheetHead('ออกโดยไม่บันทึก?')
+      +`<div class="muted" style="font-size:14px;margin-bottom:18px">รายการที่ยังไม่ได้กดบันทึกจะหายไป</div>`
+      +`<button class="btn-danger" style="margin-bottom:10px" data-act="exit-discard">${I.x} ออก ไม่บันทึก</button>`
+      +`<button class="btn btn-ghost" data-act="modal-close">กลับไปแก้ต่อ</button>`);
+  }
+  if(m.type==='closeday'){const d=summaryData();
+    const rows=[['ยอดขาย',fmt(d.sales)],['จำนวนบิล',d.count+' บิล'],['จำนวนหัว',d.heads+' หัว'],['เงินสด',fmt(d.cash)],['โอน',fmt(d.transfer)],[(db.settings.customName||'ช่องพิเศษ'),fmt(d.qr)]];
+    return sheet(sheetHead('ปิดร้านวันนี้')
+      +`<div class="muted" style="font-size:13.5px;margin-bottom:14px">สรุปยอดก่อนปิดร้าน · ${today()}</div>`
+      +rows.map(r=>`<div style="display:flex;justify-content:space-between;font-size:14.5px;padding:7px 0;border-bottom:1px solid var(--line2)"><span class="muted">${esc(r[0])}</span><span style="font-weight:600">${r[1]}</span></div>`).join('')
+      +`<button class="btn btn-primary" style="margin-top:16px" data-act="closeday-go">${I.check} ยืนยันปิดร้าน</button>`);
+  }
+  if(m.type==='qrpay'){
+    return sheet(sheetHead(esc(m.name))
+      +(m.img?`<img src="${m.img}" style="width:100%;max-width:280px;display:block;margin:0 auto 16px;border-radius:14px;border:1px solid var(--line)">`
+        :`<div class="muted" style="text-align:center;padding:26px 0;font-size:13.5px">ยังไม่ได้ตั้งค่ารูป — เพิ่มได้ที่ ตั้งค่า</div>`)
+      +`<button class="btn btn-primary" data-act="qrpay-confirm" data-m="${m.method}">${I.check} รับเงินแล้ว</button>`);
+  }
+  if(m.type==='clear')return sheet(sheetHead(esc(m.title))+`<div class="muted" style="font-size:14px;margin-bottom:18px">คิดเงินเรียบร้อยแล้ว เก็บโต๊ะให้ว่างไหม?</div><button class="btn btn-primary" data-act="clear-go">เคลียร์โต๊ะ · ทำให้ว่าง</button>`);
+  if(m.type==='listedit'){const f=LIST_FIELDS[m.list];
+    return sheet(sheetHead(m.isNew?'เพิ่ม '+m.title:'แก้ไข '+m.title)+f.map(([k,l,ty])=>`<div style="margin-bottom:12px"><div class="muted" style="font-size:12.5px;margin-bottom:6px">${l}</div><input class="input" data-mfield="${k}" inputmode="${ty==='number'?'decimal':'text'}" value="${esc(m.values[k]??'')}"></div>`).join('')+`<button class="btn btn-primary" style="margin-top:6px" data-act="modal-save">บันทึก</button>`);}
+  if(m.type==='move'||m.type==='merge'){
+    const b=curBill(); const list=db.tables.filter(t=>!b.tableIds.includes(t.id));
+    const row=t=>{const tap=m.type==='merge'||t.status==='available'; const sc=`var(${STATUS[t.status].c})`;
+      return `<button class="pick" data-pick data-label="${esc(t.label)}" ${tap?`data-act="${m.type==='move'?'do-move':'do-merge'}" data-id="${t.id}"`:'disabled style="opacity:.45"'}>โต๊ะ ${esc(t.label)}<span style="font-size:12.5px;font-weight:600;color:${sc}">${STATUS[t.status].label}</span></button>`;};
+    return sheet(sheetHead(m.type==='move'?'ย้ายไปโต๊ะ':'รวมกับโต๊ะ')
+      +(list.length>8?`<input class="picksearch" id="picksearch" inputmode="numeric" placeholder="ค้นหาเลขโต๊ะ…">`:'')
+      +`<div style="max-height:52vh;overflow:auto">`+(list.length?list.map(row).join(''):`<div class="muted" style="font-size:13.5px">ไม่มีโต๊ะ</div>`)+`</div>`);
+  }
+  if(m.type==='split'){const b=curBill();
+    return sheet(sheetHead('แยกโต๊ะออกจากกลุ่ม')+b.tableIds.map(id=>{const t=db.tables.find(x=>x.id===id); return `<button class="pick" data-pick data-label="${esc(t.label)}" data-act="do-split" data-id="${id}">โต๊ะ ${esc(t.label)}<span class="muted" style="font-size:12px;font-weight:400">แยกออก</span></button>`;}).join(''));}
+  if(m.type==='billactions'){const b=db.bills.find(x=>x.id===m.id);
+    return sheet(sheetHead('บิล #'+String(b.no).padStart(4,'0'))+`<button class="btn btn-ghost" style="margin-bottom:10px" data-act="bill-reopen" data-id="${b.id}">${I.edit} แก้ไขบิลนี้</button><button class="btn-danger" data-act="bill-void" data-id="${b.id}">${I.trash} ยกเลิกบิลนี้</button>`);}
+  if(m.type==='cashmove'){
+    return sheet(sheetHead(m.dir==='in'?'บันทึกเงินเข้า':'บันทึกเงินออก')+`<div style="margin-bottom:12px"><div class="muted" style="font-size:12.5px;margin-bottom:6px">จำนวนเงิน</div><input class="input" data-mfield="amount" inputmode="decimal" value="${esc(m.values.amount||'')}"></div><div style="margin-bottom:12px"><div class="muted" style="font-size:12.5px;margin-bottom:6px">หมายเหตุ</div><input class="input" data-mfield="note" value="${esc(m.values.note||'')}"></div><button class="btn btn-primary" data-act="cash-save">บันทึก</button>`);}
+  if(m.type==='closeout'){const d=cashData();
+    return sheet(sheetHead('นับเงินปิดร้าน')+`<div class="muted" style="font-size:13.5px;margin-bottom:12px">ระบบคำนวณว่าควรมี <b style="color:var(--text)">${fmt(d.expected)}</b></div><div style="margin-bottom:12px"><div class="muted" style="font-size:12.5px;margin-bottom:6px">นับเงินสดได้จริง</div><input class="input" data-mfield="counted" inputmode="decimal" value="${esc(m.values.counted||'')}"></div><button class="btn btn-primary" data-act="closeout-save">บันทึกปิดร้าน</button>`);}
+  if(m.type==='resv'){
+    const F=[['name','ชื่อผู้จอง','text'],['phone','เบอร์โทร','text'],['people','จำนวนคน','number'],['date','วันที่ (YYYY-MM-DD)','text'],['time','เวลา','text'],['note','หมายเหตุ','text']];
+    return sheet(sheetHead('จองโต๊ะใหม่')+F.map(([k,l,ty])=>`<div style="margin-bottom:11px"><div class="muted" style="font-size:12.5px;margin-bottom:6px">${l}</div><input class="input" data-mfield="${k}" inputmode="${ty==='number'?'decimal':'text'}" value="${esc(m.values[k]??'')}"></div>`).join('')
+      +`<div style="margin-bottom:12px"><div class="muted" style="font-size:12.5px;margin-bottom:6px">โต๊ะ (ถ้าระบุ)</div>
+        <select class="input" data-mfield="tableId"><option value="">— ไม่ระบุ —</option>${db.tables.map(t=>`<option value="${t.id}" ${m.values.tableId===t.id?'selected':''}>โต๊ะ ${esc(t.label)}</option>`).join('')}</select></div>
+      <button class="btn btn-primary" data-act="resv-save">บันทึกการจอง</button>`);}
+  if(m.type==='seat'){const r=db.reservations.find(x=>x.id===m.id); const av=db.tables.filter(t=>t.status==='available'||t.status==='reserved');
+    return sheet(sheetHead('รับลูกค้าเข้านั่ง')+`<div style="font-size:14.5px;margin-bottom:6px">${esc(r.name)} · ${r.people} คน</div><div class="muted" style="font-size:13px;margin-bottom:14px">เลือกโต๊ะที่จะเปิดบิล</div>`+(av.length>8?`<input class="picksearch" id="picksearch" inputmode="numeric" placeholder="ค้นหาเลขโต๊ะ…">`:'')+`<div style="max-height:52vh;overflow:auto">${av.map(t=>`<button class="pick" data-pick data-label="${esc(t.label)}" data-act="seat-go" data-rid="${r.id}" data-id="${t.id}">โต๊ะ ${esc(t.label)}<span class="muted" style="font-size:12px;font-weight:400">${STATUS[t.status].label}</span></button>`).join('')}</div>`);}
+  return '';
+}
+function sheet(inner){return `<div class="scrim" data-act="modal-close"></div><div class="sheet">${inner}</div>`;}
+
+/* ============ AFTER RENDER ============ */
+function afterRender(){
+  if(editorOpen)attachDrag('eplane','[data-etable]');
+  if(mapOpen)attachMapEvents();
+}
+function attachDrag(planeId,sel){
+  const plane=document.getElementById(planeId); if(!plane)return;
+  const pw=plane.offsetWidth, ph=plane.offsetHeight;
+  document.querySelectorAll(sel).forEach(elm=>{
+    const id=elm.getAttribute('data-etable'); let drag=null;
+    elm.addEventListener('pointerdown',e=>{elm.setPointerCapture(e.pointerId);const r=plane.getBoundingClientRect();const t=db.tables.find(x=>x.id===id);drag={ox:e.clientX-(r.left+t.x),oy:e.clientY-(r.top+t.y)};});
+    elm.addEventListener('pointermove',e=>{if(!drag)return;const r=plane.getBoundingClientRect();const t=db.tables.find(x=>x.id===id);t.x=clamp(e.clientX-r.left-drag.ox,0,pw-TW);t.y=clamp(e.clientY-r.top-drag.oy,0,ph-TH);elm.style.left=t.x+'px';elm.style.top=t.y+'px';});
+    elm.addEventListener('pointerup',()=>{if(!drag)return;save();editSel=id;drag=null;render();});
+  });
+}
+function warpToTable(q){
+  q=(q||'').trim(); if(!q)return;
+  const t=db.tables.find(x=>x.label.toLowerCase()===q.toLowerCase())||db.tables.find(x=>x.label.toLowerCase().startsWith(q.toLowerCase()));
+  if(!t)return;
+  const elm=document.querySelector(`[data-table="${t.id}"],[data-etable="${t.id}"]`);
+  if(!elm)return;
+  elm.scrollIntoView({behavior:'smooth',block:'center',inline:'center'});
+  elm.classList.remove('flash'); void elm.offsetWidth; elm.classList.add('flash');
+  setTimeout(()=>elm.classList.remove('flash'),1000);
+}
+function filterPicks(q){
+  q=(q||'').trim().toLowerCase();
+  document.querySelectorAll('[data-pick]').forEach(el=>{el.style.display=(!q||el.getAttribute('data-label').toLowerCase().includes(q))?'':'none';});
+}
+
+/* ============ EVENTS ============ */
+app.addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]');
+  if(!b){const te=e.target.closest('[data-table]'); if(te&&view==='floor'&&!billId&&!receipt&&!editorOpen&&!overlay&&!modal&&!mapOpen){const t=db.tables.find(x=>x.id===te.getAttribute('data-table')); if(t)tapTable(t);} return;}
+  const act=b.getAttribute('data-act'),id=b.getAttribute('data-id'),list=b.getAttribute('data-list');
+  switch(act){
+    case 'login-pick': pickUid=b.getAttribute('data-uid'); render(); break;
+    case 'login-back': pickUid=null; render(); break;
+    case 'login-go':{const p=db.staff.find(s=>s.id===pickUid);const pin=document.getElementById('pin').value;
+      if(p&&pin===p.pin){session=p;localStorage.setItem(SESS_KEY,p.id);pickUid=null;view='floor';render();}
+      else document.getElementById('pinerr').style.display='block'; break;}
+    case 'logout': session=null; pickUid=null; localStorage.removeItem(SESS_KEY); view='floor'; overlay=null; render(); break;
+    case 'nav': view=b.getAttribute('data-view'); render(); break;
+    case 'map-open': mapOpen=true; mapSel=null; render(); break;
+    case 'map-close': mapOpen=false; mapSel=null; render(); break;
+    case 'floortab': floorTab=b.getAttribute('data-t'); mapSel=null; render(); break;
+    case 'maptool': mapTool=b.getAttribute('data-tool'); render(); break;
+    case 'map-del':{db.mapItems=db.mapItems.filter(x=>x.id!==mapSel);mapSel=null;save();render();break;}
+    case 'map-rot':{const it=db.mapItems.find(x=>x.id===b.getAttribute('data-id'));if(it){it.rot=((it.rot||0)+15)%360;save();render();}break;}
+    case 'map-clear':db.mapItems=[];mapSel=null;save();render();break;
+    case 'layout': layout=b.getAttribute('data-l'); localStorage.setItem('mookratha_layout',layout); applyLayout(); render(); break;
+    case 'table-search':{const el=document.getElementById('tsearch'); if(el)warpToTable(el.value); break;}
+    case 'overlay': overlay=b.getAttribute('data-ov'); render(); break;
+    case 'overlay-close': overlay=null; render(); break;
+
+    case 'bill-close': closeBill(); break;
+    case 'bill-exit': exitBill(); break;
+    case 'exit-discard': doExit(); break;
+    case 'dashrange': dashRange=b.getAttribute('data-r'); render(); break;
+    case 'drill': modal={type:'drill',mode:b.getAttribute('data-mode'),key:b.getAttribute('data-k')}; render(); break;
+    case 'periodpng': periodPNG(b.getAttribute('data-mode'),b.getAttribute('data-k')); break;
+    case 'yearpng': yearPNG(); break;
+    case 'bq':{const bl=curBill();const kind=b.getAttribute('data-kind'),bid=b.getAttribute('data-id');const bag=kind==='pkg'?bl.pkg:bl.itm;bag[bid]=Math.max(0,(bag[bid]||0)+parseInt(b.getAttribute('data-d')));if(bl.saved)billEdited=true;save();render();break;}
+    case 'pay-start': payStep=true; render(); break;
+    case 'pay-cancel': payStep=false; render(); break;
+    case 'pay': checkout(b.getAttribute('data-m')); break;
+    case 'pay-qr':{const meth=b.getAttribute('data-m'); const name=meth==='transfer'?'โอน — สแกน QR':(db.settings.customName||'ช่องพิเศษ'); const img=meth==='transfer'?db.settings.transferQR:db.settings.customImg; modal={type:'qrpay',method:meth,name,img}; render(); break;}
+    case 'qrpay-confirm': modal=null; checkout(b.getAttribute('data-m')); break;
+    case 'img-del':{const k=b.getAttribute('data-img'); db.settings[k]=''; save(); render(); break;}
+    case 'op-move': modal={type:'move'}; render(); break;
+    case 'op-merge': modal={type:'merge'}; render(); break;
+    case 'op-split': modal={type:'split'}; render(); break;
+    case 'do-move': doMove(id); break;
+    case 'do-merge': doMerge(id); break;
+    case 'do-split': doSplit(id); break;
+
+    case 'receipt-done': receipt=null; render(); break;
+    case 'receipt-png': receiptPNG(); break;
+    case 'sum-png': summaryPNG(); break;
+    case 'closeday': modal={type:'closeday'}; render(); break;
+    case 'closeday-go': closeDay(); break;
+
+    case 'editor-open': editorOpen=true; editSel=null; render(); break;
+    case 'editor-close': editorOpen=false; editSel=null; render(); break;
+    case 'etable-add':{const n=db.tables.reduce((m,t)=>Math.max(m,parseInt(t.label)||0),0)+1;const nid=uid();db.tables.push({id:nid,label:String(n),seats:4,x:20,y:20,status:'available'});editSel=nid;save();render();break;}
+    case 'etable-done': editSel=null; render(); break;
+    case 'etable-del': db.tables=db.tables.filter(t=>t.id!==editSel); editSel=null; save(); render(); break;
+    case 'eseat':{const t=db.tables.find(x=>x.id===editSel);t.seats=Math.max(1,t.seats+parseInt(b.getAttribute('data-d')));save();render();break;}
+
+    case 'edit-new': openListEditor(list,null); break;
+    case 'edit-item': openListEditor(list,db[list].find(x=>x.id===id)); break;
+    case 'edit-del': db[list]=db[list].filter(x=>x.id!==id); save(); render(); break;
+    case 'modal-close': modal=null; render(); break;
+    case 'modal-save': saveListItem(); break;
+    case 'clear-go': setStatus(modal.id,'available'); modal=null; save(); render(); break;
+
+    case 'resv-new': modal={type:'resv',values:{people:2,date:today(),time:'18:00'}}; render(); break;
+    case 'resv-save': saveResv(); break;
+    case 'resv-cancel':{const r=db.reservations.find(x=>x.id===id);r.status='cancelled';if(r.tableId&&(db.tables.find(t=>t.id===r.tableId)||{}).status==='reserved')setStatus(r.tableId,'available');save();render();break;}
+    case 'resv-seat': modal={type:'seat',id}; render(); break;
+    case 'seat-go': seatResv(b.getAttribute('data-rid'),id); break;
+
+    case 'cash-move': modal={type:'cashmove',dir:b.getAttribute('data-t'),values:{}}; render(); break;
+    case 'cash-save': saveCash(); break;
+    case 'closeout': modal={type:'closeout',values:{}}; render(); break;
+    case 'closeout-save': saveCloseout(); break;
+
+    case 'bill-actions': modal={type:'billactions',id}; render(); break;
+    case 'bill-view': billView=id; render(); break;
+    case 'billview-close': billView=null; render(); break;
+    case 'bill-reopen': reopenBill(id); break;
+    case 'bill-void': voidBill(id); break;
+  }
+});
+app.addEventListener('input',e=>{
+  const f=e.target.getAttribute('data-field');
+  if(f==='shopname'){db.settings.shopName=e.target.value;save();}
+  else if(f==='promptpay'){db.settings.promptpay=e.target.value;save();}
+  else if(f==='customname'){db.settings.customName=e.target.value;save();}
+  else if(f==='etlabel'){const t=db.tables.find(x=>x.id===editSel);if(t){t.label=e.target.value;save();}}
+  const mf=e.target.getAttribute('data-mfield'); if(mf&&modal)modal.values[mf]=e.target.value;
+});
+app.addEventListener('change',e=>{const mf=e.target.getAttribute('data-mfield'); if(mf&&modal)modal.values[mf]=e.target.value;
+  const ik=e.target.getAttribute('data-img'); if(ik&&e.target.files&&e.target.files[0]){fileToThumb(e.target.files[0],url=>{db.settings[ik]=url;save();render();});}});
+function fileToThumb(file,cb){
+  const url=URL.createObjectURL(file); const im=new Image();
+  im.onload=()=>{const max=680;let w=im.width,h=im.height;const sc=Math.min(1,max/Math.max(w,h));const cw=Math.round(w*sc),ch=Math.round(h*sc);
+    const cv=document.createElement('canvas');cv.width=cw;cv.height=ch;cv.getContext('2d').drawImage(im,0,0,cw,ch);URL.revokeObjectURL(url);
+    try{cb(cv.toDataURL('image/jpeg',0.85));}catch{cb('');}};
+  im.onerror=()=>{URL.revokeObjectURL(url);}; im.src=url;
+}
+app.addEventListener('keyup',e=>{if(e.target.id==='picksearch')filterPicks(e.target.value);});
+app.addEventListener('keydown',e=>{if(e.target.id==='tsearch'&&e.key==='Enter')warpToTable(e.target.value);});
+
+/* ---------- logic ---------- */
+function tapTable(t){
+  if(t.status==='billing'){modal={type:'clear',id:t.id,title:'โต๊ะ '+t.label};render();return;}
+  if(t.status==='reserved'){const r=db.reservations.find(x=>x.status==='booked'&&x.tableId===t.id);if(r){modal={type:'seat',id:r.id};render();return;}}
+  openBill(t);
+}
+function closeBill(){const b=curBill();const {total,heads}=totals(b);
+  if(heads===0&&total===0){db.bills=db.bills.filter(x=>x.id!==b.id);b.tableIds.forEach(id=>setStatus(id,'available'));}
+  else {
+    if(!b.saved){b.saved=true; billLog(b,'บันทึกออเดอร์',`${heads} หัว · ${fmt(total)}`);}
+    else if(billEdited){billLog(b,'แก้ไขออเดอร์',`${heads} หัว · ${fmt(total)}`);}
+    b.tableIds.forEach(id=>setStatus(id,'occupied'));
+  }
+  billId=null;payStep=false;billEdited=false;billBackup=null;save();render();}
+function exitBill(){const b=curBill();const {total}=totals(b);
+  if((!b.saved&&total>0)||(b.saved&&billEdited)){modal={type:'exitconfirm'};render();return;}
+  doExit();}
+function doExit(){const b=curBill();
+  if(!b.saved){db.bills=db.bills.filter(x=>x.id!==b.id);b.tableIds.forEach(id=>setStatus(id,'available'));}
+  else {if(billBackup){b.pkg=JSON.parse(JSON.stringify(billBackup.pkg));b.itm=JSON.parse(JSON.stringify(billBackup.itm));} b.tableIds.forEach(id=>setStatus(id,'occupied'));}
+  billId=null;payStep=false;billEdited=false;billBackup=null;modal=null;save();render();}
+function checkout(method){const b=curBill();const {total,heads}=totals(b);
+  const lines=[];db.packages.forEach(p=>{const q=b.pkg[p.id]||0;if(q)lines.push({name:p.name,qty:q,amount:q*p.price,kind:'pkg'});});
+  db.menu.forEach(m=>{const q=b.itm[m.id]||0;if(q)lines.push({name:m.name,qty:q,amount:q*m.price,kind:'itm'});});
+  if(!b.no)b.no=++db.counters.bill;
+  b.status='paid';b.closedAt=new Date().toISOString();b.paymentMethod=method;b.total=total;b.heads=heads;b.lines=lines;b.tableLabel=labelFor(b);
+  billLog(b,'คิดเงิน',`${fmt(total)} · ${payLabel(method)}`);
+  b.tableIds.forEach(id=>setStatus(id,'billing')); receipt=b; billId=null; payStep=false; save(); render();}
+function setStatus(tid,st){const t=db.tables.find(x=>x.id===tid);if(t)t.status=st;}
+
+function doMove(target){const b=curBill();const old=b.tableIds.slice();old.forEach(id=>setStatus(id,'available'));b.tableIds=[target];b.tableLabel=labelFor(b);setStatus(target,'occupied');billLog(b,'ย้ายโต๊ะ',`${old.map(i=>(db.tables.find(t=>t.id===i)||{}).label).join('+')} → ${b.tableLabel}`);modal=null;save();render();}
+function doMerge(target){const b=curBill();const other=db.bills.find(x=>x.status==='open'&&x.tableIds.includes(target)&&x.id!==b.id);
+  if(other){db.packages.forEach(p=>{if(other.pkg[p.id])b.pkg[p.id]=(b.pkg[p.id]||0)+other.pkg[p.id];});db.menu.forEach(m=>{if(other.itm[m.id])b.itm[m.id]=(b.itm[m.id]||0)+other.itm[m.id];});other.tableIds.forEach(id=>{if(!b.tableIds.includes(id))b.tableIds.push(id);});db.bills=db.bills.filter(x=>x.id!==other.id);}
+  else if(!b.tableIds.includes(target))b.tableIds.push(target);
+  b.tableLabel=labelFor(b);b.tableIds.forEach(id=>setStatus(id,'occupied'));billLog(b,'รวมโต๊ะ',b.tableLabel);modal=null;save();render();}
+function doSplit(id){const b=curBill();if(b.tableIds.length<=1){modal=null;render();return;}b.tableIds=b.tableIds.filter(x=>x!==id);setStatus(id,'available');b.tableLabel=labelFor(b);billLog(b,'แยกโต๊ะ',(db.tables.find(t=>t.id===id)||{}).label+' ออก');modal=null;save();render();}
+
+function openListEditor(key,item){const blank={packages:{name:'',price:0},menu:{name:'',price:0,category:'อื่นๆ'},staff:{name:'',pin:'0000',role:'staff'}}[key];
+  modal={type:'listedit',list:key,title:{packages:'แพ็กเกจ',menu:'เมนู',staff:'พนักงาน'}[key],isNew:!item,values:item?{...item}:{...blank,id:uid()}};render();}
+function saveListItem(){const v={...modal.values};LIST_FIELDS[modal.list].forEach(([k,,ty])=>{if(ty==='number')v[k]=parseFloat(v[k])||0;});if(!v.name){modal=null;render();return;}const arr=db[modal.list];const i=arr.findIndex(x=>x.id===v.id);if(i>=0)arr[i]=v;else arr.push(v);modal=null;save();render();}
+
+function saveResv(){const v=modal.values;if(!v.name){modal=null;render();return;}
+  const r={id:uid(),name:v.name,phone:v.phone||'',people:parseInt(v.people)||1,date:v.date||today(),time:v.time||'',note:v.note||'',tableId:v.tableId||'',status:'booked',createdAt:new Date().toISOString()};
+  db.reservations.push(r); if(r.tableId&&(db.tables.find(t=>t.id===r.tableId)||{}).status==='available')setStatus(r.tableId,'reserved');
+  modal=null;save();render();}
+function seatResv(rid,tid){const r=db.reservations.find(x=>x.id===rid);if(r)r.status='seated';setStatus(tid,'available');modal=null;overlay=null;view='floor';const t=db.tables.find(x=>x.id===tid);save();openBill(t);}
+
+function saveCash(){const amt=parseFloat(modal.values.amount);if(!amt||amt<=0){modal=null;render();return;}
+  db.cash.unshift({id:uid(),at:new Date().toISOString(),staffName:session.name,type:modal.dir,amount:amt,note:modal.values.note||''});
+  logAct(modal.dir==='in'?'เงินเข้าลิ้นชัก':'เงินออกลิ้นชัก',fmt(amt)+(modal.values.note?' · '+modal.values.note:''));modal=null;save();render();}
+function saveCloseout(){const counted=parseFloat(modal.values.counted)||0;const d=cashData();
+  const t=today();db.closeouts=db.closeouts.filter(c=>c.date!==t);
+  db.closeouts.push({id:uid(),date:t,staffName:session.name,counted,expected:d.expected,diff:counted-d.expected,at:new Date().toISOString()});
+  logAct('ปิดร้าน/นับเงิน',`นับได้ ${fmt(counted)} · ส่วนต่าง ${fmt(counted-d.expected)}`);modal=null;save();render();}
+
+function reopenBill(id){const b=db.bills.find(x=>x.id===id);b.status='open';b.saved=true;b.tableIds.forEach(tid=>{if((db.tables.find(t=>t.id===tid)||{}))setStatus(tid,'occupied');});billLog(b,'เปิดแก้ไขบิล','');modal=null;overlay=null;billView=null;billId=b.id;payStep=false;save();render();}
+function voidBill(id){const b=db.bills.find(x=>x.id===id);b.status='void';b.tableIds.forEach(tid=>{if((db.tables.find(t=>t.id===tid)||{}).status==='billing')setStatus(tid,'available');});billLog(b,'ยกเลิกบิล',fmt(b.total));modal=null;save();render();}
+
+function clockIn(p){if(!db.shifts.some(s=>s.staffId===p.id&&!s.outAt))db.shifts.unshift({id:uid(),staffId:p.id,staffName:p.name,inAt:new Date().toISOString(),outAt:null});save();}
+function clockOut(){if(!session)return;const s=db.shifts.find(x=>x.staffId===session.id&&!x.outAt);if(s)s.outAt=new Date().toISOString();save();}
+
+applyLayout();
+// โหลดจาก localStorage ก่อน (เร็ว) แล้ว sync จาก Supabase ทีหลัง
+render();
+syncDown().then(()=>render()).catch(()=>{});
+</script>
+</body>
+</html>
