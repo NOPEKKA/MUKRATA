@@ -19,7 +19,7 @@
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   html,body{margin:0;height:100%;}
   body{font-family:'IBM Plex Sans Thai',system-ui,sans-serif; background:var(--bg); color:var(--text); display:flex; justify-content:center; -webkit-font-smoothing:antialiased;}
-  #app{width:100%; max-width:460px; height:100vh; display:flex; flex-direction:column; overflow:hidden; position:relative; background:var(--bg);}
+  #app{width:100%; max-width:460px; height:100vh; height:100dvh; display:flex; flex-direction:column; overflow:hidden; position:relative; background:var(--bg);}
   button{font-family:inherit; cursor:pointer; color:inherit;}
   input{font-family:inherit;}
   .muted{color:var(--muted);}
@@ -46,7 +46,7 @@
   .canvas{position:relative; flex:1; margin:0 16px 16px; border-radius:20px; background:var(--surface); border:1px solid var(--line); overflow:auto; -webkit-overflow-scrolling:touch;}
   .plane{position:relative;}
   .fgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(78px,1fr)); gap:10px; padding:12px;}
-  .table.grid{position:static; width:auto; height:80px;}
+  .table.grid{position:static; width:auto; height:80px; touch-action:manipulation;}
   .canvas.edit .plane{background-image:radial-gradient(circle,#e8e6e2 1.2px,transparent 1.2px); background-size:24px 24px;}
   /* MAP editor */
   .map-canvas{position:relative;flex:1;margin:0 16px 12px;border-radius:20px;background:#f0ece4;border:1px solid var(--line);overflow:hidden;touch-action:none;}
@@ -230,30 +230,54 @@ const DEFAULT={
 
 /* ============ CLOUD SYNC via Firebase Realtime Database ============ */
 const DB_KEY='mookratha_db_v4', SESS_KEY='mookratha_sess';
-let syncTimer=null;
+let syncTimer=null, localRev=0, pendingRemote=null;
 function saveLocal(){try{localStorage.setItem(DB_KEY,JSON.stringify(db));}catch{}}
 function save(){
   saveLocal();
   clearTimeout(syncTimer);
-  syncTimer=setTimeout(pushCloud,800);
+  syncTimer=setTimeout(pushCloud,400);
 }
 async function pushCloud(){
-  try{await cloudRef.set(db);}
-  catch(e){console.warn('push failed, local only',e);}
+  clearTimeout(syncTimer); syncTimer=null;
+  try{ db._ts=Date.now(); localRev=db._ts; await cloudRef.set(db); }
+  catch(e){ console.warn('push failed, local only',e); }
 }
-async function syncDown(){
-  try{
-    const snap=await cloudRef.get();
-    const data=snap.exists()?snap.val():null;
-    if(data){db=data;saveLocal();}
-  }catch(e){console.warn('sync failed, using local',e);}
+// อย่าให้ข้อมูลจากเครื่องอื่นมาสลับจอตอนกำลังแก้บิล/ผังอยู่
+function editingNow(){ return !!(billId||receipt||editorOpen||mapOpen||modal||overlay||billView); }
+// เติมฟิลด์ที่จำเป็นให้บิลเก่า/ข้อมูลไม่ครบ กันแอปพัง
+function normalizeDb(){
+  ['reservations','cash','closeouts','shifts','logs','mapItems','bills','packages','menu','tables','staff'].forEach(k=>{if(!Array.isArray(db[k]))db[k]=[];});
+  if(!db.counters)db.counters={bill:0};
+  if(!db.settings)db.settings={shopName:'ร้านหมูกระทะ',transferQR:'',customName:'ช่องพิเศษ',customImg:''};
+  db.bills.forEach(b=>{ if(!b.pkg)b.pkg={}; if(!b.itm)b.itm={}; if(!b.tableIds)b.tableIds=[]; });
+}
+function applyRemote(data){
+  db=data;
+  normalizeDb();
+  saveLocal();
+  render();
+}
+function watchCloud(){
+  cloudRef.on('value',snap=>{
+    const data=snap.val();
+    if(!data){ pushCloud(); return; }             // คลาวด์ยังว่าง → ดันข้อมูลเครื่องนี้ขึ้นไปตั้งต้น
+    if(data._ts && data._ts===localRev) return;    // ข้ามเสียงสะท้อนจากที่เราเพิ่งเซฟเอง
+    if(editingNow()){ pendingRemote=data; return; } // กำลังแก้อยู่ → พักไว้ก่อน
+    pendingRemote=null;
+    applyRemote(data);
+  },err=>console.warn('cloud listen failed, local only',err));
+  // เมื่อออกจากหน้าแก้ไขแล้ว ค่อยดึงข้อมูลใหม่ที่พักไว้มาแสดง (ถ้าใหม่กว่าของเรา)
+  setInterval(()=>{
+    if(!pendingRemote) return;
+    if(pendingRemote._ts && pendingRemote._ts<=localRev){ pendingRemote=null; return; }
+    if(!editingNow()){ const d=pendingRemote; pendingRemote=null; applyRemote(d); }
+  },1000);
 }
 function loadLocal(){try{return JSON.parse(localStorage.getItem(DB_KEY));}catch{return null;}}
 
 
 let db=loadLocal()||JSON.parse(JSON.stringify(DEFAULT));
-['reservations','cash','closeouts','shifts','logs','mapItems'].forEach(k=>{if(!db[k])db[k]=[];});
-if(!db.counters)db.counters={bill:0};
+normalizeDb();
 let session=null;
 try{const s=localStorage.getItem(SESS_KEY); if(s) session=db.staff.find(x=>x.id===s)||null;}catch{}
 
@@ -463,8 +487,9 @@ function openBill(t){
 function curBill(){return db.bills.find(b=>b.id===billId);}
 function labelFor(b){return b.tableIds.map(id=>{const t=db.tables.find(x=>x.id===id);return t?t.label:'?';}).join('+');}
 function totals(b){
-  const total=db.packages.reduce((s,p)=>s+(b.pkg[p.id]||0)*p.price,0)+db.menu.reduce((s,m)=>s+(b.itm[m.id]||0)*m.price,0);
-  const heads=db.packages.reduce((s,p)=>s+(b.pkg[p.id]||0),0);
+  const pkg=b.pkg||{}, itm=b.itm||{};
+  const total=db.packages.reduce((s,p)=>s+(pkg[p.id]||0)*p.price,0)+db.menu.reduce((s,m)=>s+(itm[m.id]||0)*m.price,0);
+  const heads=db.packages.reduce((s,p)=>s+(pkg[p.id]||0),0);
   return {total,heads};
 }
 function viewBilling(){
@@ -1149,9 +1174,13 @@ function clockIn(p){if(!db.shifts.some(s=>s.staffId===p.id&&!s.outAt))db.shifts.
 function clockOut(){if(!session)return;const s=db.shifts.find(x=>x.staffId===session.id&&!x.outAt);if(s)s.outAt=new Date().toISOString();save();}
 
 applyLayout();
-// โหลดจาก localStorage ก่อน (เร็ว) แล้ว sync จาก Supabase ทีหลัง
+// โหลดจาก localStorage ก่อน (เร็ว) แล้วต่อ realtime กับ Firebase
 render();
-syncDown().then(()=>render()).catch(()=>{});
+watchCloud();
+// เวลาปิดแอป/สลับไปแอปอื่นบนมือถือ ให้รีบเซฟที่ค้างอยู่ขึ้นคลาวด์ทันที
+function flushPending(){ if(syncTimer) pushCloud(); }
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') flushPending(); });
+window.addEventListener('pagehide',flushPending);
 </script>
 </body>
 </html>
