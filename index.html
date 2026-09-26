@@ -155,6 +155,25 @@
 </head>
 <body>
 <div id="app"></div>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script>
+/* ============ FIREBASE CONFIG ============
+   ใส่ config ของโปรเจกต์ Firebase ตัวเอง (Project settings > General > Your apps > SDK setup and configuration)
+   ต้องเปิดใช้ Realtime Database ในคอนโซล Firebase ด้วย (Build > Realtime Database > Create Database)
+*/
+const firebaseConfig={
+  apiKey:"YOUR_API_KEY",
+  authDomain:"YOUR_PROJECT.firebaseapp.com",
+  databaseURL:"https://YOUR_PROJECT-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:"YOUR_PROJECT",
+  storageBucket:"YOUR_PROJECT.appspot.com",
+  messagingSenderId:"YOUR_SENDER_ID",
+  appId:"YOUR_APP_ID"
+};
+firebase.initializeApp(firebaseConfig);
+const cloudRef=firebase.database().ref('mukrata_db');
+</script>
 <script>
 const I={
   grid:'<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>',
@@ -209,7 +228,7 @@ const DEFAULT={
   bills:[], reservations:[], cash:[], closeouts:[], shifts:[], logs:[], mapItems:[]
 };
 
-/* ============ CLOUD SYNC via /api/data ============ */
+/* ============ CLOUD SYNC via Firebase Realtime Database ============ */
 const DB_KEY='mookratha_db_v4', SESS_KEY='mookratha_sess';
 let syncTimer=null;
 function saveLocal(){try{localStorage.setItem(DB_KEY,JSON.stringify(db));}catch{}}
@@ -219,14 +238,13 @@ function save(){
   syncTimer=setTimeout(pushCloud,800);
 }
 async function pushCloud(){
-  try{await fetch('/api/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(db)});}
+  try{await cloudRef.set(db);}
   catch(e){console.warn('push failed, local only',e);}
 }
 async function syncDown(){
   try{
-    const r=await fetch('/api/data');
-    if(!r.ok)return;
-    const data=await r.json();
+    const snap=await cloudRef.get();
+    const data=snap.exists()?snap.val():null;
     if(data){db=data;saveLocal();}
   }catch(e){console.warn('sync failed, using local',e);}
 }
