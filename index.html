@@ -151,6 +151,81 @@
   .rc-total{display:flex; justify-content:space-between; align-items:baseline; margin-top:6px;}
   .rc-total .v{font-size:26px; font-weight:700; letter-spacing:-.02em;}
   .rc-thanks{text-align:center; font-size:12.5px; color:var(--muted); margin-top:16px;}
+
+  /* ทุกอย่างข้างล่างนี้ใช้เฉพาะ "โหมดคอม" (body.wide) เท่านั้น
+     ถ้ากดปุ่ม "โทรศัพท์" (เอา .wide ออก) จะกลับไปเป็นแนวตั้งแบบมือถือเหมือนเดิมทุกขนาดจอ */
+
+  /* ============ TABLET (โหมดคอม, >=768px) — ขยาย grid ให้เต็มพื้นที่ ============ */
+  @media (min-width:768px){
+    body.wide #app{max-width:none;}
+    body.wide .content .pad.gcols{
+      display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(320px,1fr));
+      gap:16px; align-content:start; align-items:start;
+      max-width:1400px; width:100%; margin:0 auto;
+      padding:20px 24px 36px;
+    }
+    body.wide .content .pad.gcols > *{margin:0 !important;}
+    body.wide .content .pad.gcols .stat.big{grid-column:1 / -1;}
+  }
+
+  /* ============ DESKTOP (โหมดคอม, >=1024px) — sidebar + top bar + main ============ */
+  @media (min-width:1024px){
+    html,body{height:100%;}
+    /* :has กันไม่ให้ layout นี้ไปโดนหน้า login (ซึ่งไม่มี nav.bottom) */
+    body.wide #app:has(> nav.bottom){
+      max-width:none; width:100%; height:100vh; height:100dvh;
+      display:grid;
+      grid-template-columns:240px minmax(0,1fr);
+      grid-template-rows:auto minmax(0,1fr);
+      grid-template-areas:"side head" "side main";
+      overflow:hidden;
+    }
+    body.wide #app > header.top{
+      grid-area:head; padding:15px 28px;
+      border-bottom:1px solid var(--line); background:var(--surface);
+    }
+    body.wide #app > .content{ grid-area:main; overflow:auto; min-height:0; }
+    /* bottom nav → sidebar rail */
+    body.wide #app > nav.bottom{
+      grid-area:side;
+      flex-direction:column; justify-content:flex-start; align-items:stretch;
+      gap:4px; padding:18px 12px;
+      border-top:none; border-right:1px solid var(--line);
+      background:var(--surface); overflow-y:auto;
+    }
+    body.wide #app > nav.bottom button{
+      flex:0 0 auto; flex-direction:row; justify-content:flex-start;
+      gap:13px; padding:12px 14px; font-size:14px; font-weight:500;
+      border-radius:12px; color:var(--muted);
+    }
+    body.wide #app > nav.bottom button svg{width:20px;height:20px;}
+    body.wide #app > nav.bottom button span{font-size:14px;}
+    body.wide #app > nav.bottom button:hover{background:var(--line2);}
+    body.wide #app > nav.bottom button.active{background:var(--ink); color:#fff;}
+    body.wide #app > nav.bottom button.active svg{stroke-width:2;}
+    /* main content grid — คุม density แบบ POS ให้กระชับ */
+    body.wide #app > .content .pad.gcols{padding:24px 32px 44px;}
+    body.wide #app > .content .pad.gcols .card,
+    body.wide #app > .content .pad.gcols .stat{padding:18px;}
+    body.wide #app > .content .pad.gcols .stat.big{padding:22px;}
+    body.wide #app > .content .pad.gcols .stat .v{font-size:24px;}
+    body.wide #app > .content .pad.gcols .stat.big .v{font-size:38px;}
+    /* overlays (บิล/ใบเสร็จ/จัดผัง) — เต็มจอแต่จัดเนื้อหากลาง ไม่ยืดเกิน */
+    body.wide .overlay{max-width:none;}
+    body.wide .overlay .content.pad,
+    body.wide .overlay .content > .pad{max-width:720px; margin-left:auto; margin-right:auto; width:100%;}
+    body.wide .overlay .receipt{max-width:560px; margin-left:auto; margin-right:auto; width:100%;}
+    body.wide .overlay > .foot > *{max-width:720px; margin-left:auto; margin-right:auto;}
+  }
+
+  /* ============ LARGE DESKTOP (โหมดคอม, >=1440px) ============ */
+  @media (min-width:1440px){
+    body.wide #app > .content .pad.gcols{
+      max-width:1520px;
+      grid-template-columns:repeat(auto-fill,minmax(340px,1fr));
+    }
+  }
 </style>
 </head>
 <body>
@@ -171,8 +246,12 @@ const firebaseConfig={
   messagingSenderId:"733658792832",
   appId:"1:733658792832:web:21a2fa660b91d1dde87765"
 };
-firebase.initializeApp(firebaseConfig);
-const cloudRef=firebase.database().ref('mukrata_db');
+// ถ้าโหลด Firebase ไม่ได้ (เช่น เน็ตล่ม/โดนบล็อก) แอปยังทำงานแบบออฟไลน์ได้ ไม่ค้าง
+let cloudRef=null;
+try{
+  firebase.initializeApp(firebaseConfig);
+  cloudRef=firebase.database().ref('mukrata_db');
+}catch(e){ console.warn('Firebase init failed — offline/local only',e); }
 </script>
 <script>
 const I={
@@ -239,6 +318,7 @@ function save(){
 }
 async function pushCloud(){
   clearTimeout(syncTimer); syncTimer=null;
+  if(!cloudRef)return;
   try{ db._ts=Date.now(); localRev=db._ts; await cloudRef.set(db); }
   catch(e){ console.warn('push failed, local only',e); }
 }
@@ -258,6 +338,7 @@ function applyRemote(data){
   render();
 }
 function watchCloud(){
+  if(!cloudRef)return;
   cloudRef.on('value',snap=>{
     const data=snap.val();
     if(!data){ pushCloud(); return; }             // คลาวด์ยังว่าง → ดันข้อมูลเครื่องนี้ขึ้นไปตั้งต้น
