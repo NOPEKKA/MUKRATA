@@ -420,7 +420,7 @@ function viewLogin(){
       <div id="pinerr" style="color:var(--red);font-size:13px;text-align:center;display:none">รหัสไม่ถูกต้อง</div>
       <button class="btn btn-primary" data-act="login-go">เข้าระบบ</button>
       <button class="link" style="justify-content:center" data-act="login-back">← เลือกผู้ใช้อื่น</button></div>`}
-    <div class="muted" style="text-align:center;font-size:11.5px;margin-top:30px">เดโม่ · เจ้าของ 1234 · พนักงาน 1111</div></div>`;
+  </div>`;
 }
 
 /* ---------- FLOOR ---------- */
@@ -973,7 +973,7 @@ function editList(title,key,render,protect){
 }
 const LIST_FIELDS={packages:[['name','ชื่อ','text'],['price','ราคา/หัว','number']],
   menu:[['name','ชื่อ','text'],['price','ราคา','number'],['category','หมวด','text']],
-  staff:[['name','ชื่อ','text'],['pin','PIN','text']]};
+  staff:[['name','ชื่อ','text'],['pin','PIN (เว้นว่างได้ = เข้าได้เลยไม่ต้องใส่รหัส)','text']]};
 
 /* ---------- TABLE EDITOR ---------- */
 function viewEditor(){
@@ -1095,10 +1095,13 @@ app.addEventListener('click',e=>{
   if(!b){const te=e.target.closest('[data-table]'); if(te&&view==='floor'&&!billId&&!receipt&&!editorOpen&&!overlay&&!modal&&!mapOpen){const t=db.tables.find(x=>x.id===te.getAttribute('data-table')); if(t)tapTable(t);} return;}
   const act=b.getAttribute('data-act'),id=b.getAttribute('data-id'),list=b.getAttribute('data-list');
   switch(act){
-    case 'login-pick': pickUid=b.getAttribute('data-uid'); render(); break;
+    case 'login-pick':{const u=db.staff.find(s=>s.id===b.getAttribute('data-uid'));
+      if(u&&!(u.pin&&String(u.pin).length)){session=u;localStorage.setItem(SESS_KEY,u.id);pickUid=null;view='floor';render();}
+      else{pickUid=b.getAttribute('data-uid');render();} break;}
     case 'login-back': pickUid=null; render(); break;
     case 'login-go':{const p=db.staff.find(s=>s.id===pickUid);const pin=document.getElementById('pin').value;
-      if(p&&pin===p.pin){session=p;localStorage.setItem(SESS_KEY,p.id);pickUid=null;view='floor';render();}
+      const ok=p&&((p.pin&&String(p.pin).length)?pin===String(p.pin):true);
+      if(ok){session=p;localStorage.setItem(SESS_KEY,p.id);pickUid=null;view='floor';render();}
       else document.getElementById('pinerr').style.display='block'; break;}
     case 'logout': session=null; pickUid=null; localStorage.removeItem(SESS_KEY); view='floor'; overlay=null; render(); break;
     case 'nav': view=b.getAttribute('data-view'); render(); break;
