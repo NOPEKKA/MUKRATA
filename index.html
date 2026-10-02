@@ -960,7 +960,11 @@ function viewSettings(){
       <button class="iconbtn" data-act="map-open">${I.edit} วาดผัง</button></div>
     ${editList('แพ็กเกจบุฟเฟต์','packages',p=>`${esc(p.name)} · ${fmt(p.price)}`)}
     ${editList('เมนูสั่งเพิ่ม','menu',m=>`${esc(m.name)} · ${fmt(m.price)}`)}
-    ${editList('พนักงาน','staff',s=>`${esc(s.name)} · ${s.role==='owner'?'เจ้าของ':'พนักงาน'}`,true)}</div>`;
+    ${editList('พนักงาน','staff',s=>`${esc(s.name)} · ${s.role==='owner'?'เจ้าของ':'พนักงาน'}`,true)}
+    <div class="card" style="margin-bottom:14px;border-color:var(--red)">
+      <div class="sec" style="color:var(--red)">รีเซ็ตข้อมูล</div>
+      <div class="muted" style="font-size:12.5px;margin-bottom:12px">ลบประวัติบิล/ยอดขาย/ลิ้นชัก/การจอง ตามช่วงเวลาที่เลือก · ต้องยืนยัน 2 รอบ + ใส่รหัส</div>
+      <button class="btn-danger" data-act="reset-open">${I.trash} รีเซ็ตข้อมูล</button></div></div>`;
 }
 function editList(title,key,render,protect){
   return `<div class="card" style="margin-bottom:14px">
@@ -1029,6 +1033,30 @@ function viewModal(){
       +`<button class="btn btn-primary" data-act="qrpay-confirm" data-m="${m.method}">${I.check} รับเงินแล้ว</button>`);
   }
   if(m.type==='clear')return sheet(sheetHead(esc(m.title))+`<div class="muted" style="font-size:14px;margin-bottom:18px">คิดเงินเรียบร้อยแล้ว เก็บโต๊ะให้ว่างไหม?</div><button class="btn btn-primary" data-act="clear-go">เคลียร์โต๊ะ · ทำให้ว่าง</button>`);
+  if(m.type==='resetpick'){
+    const opt=(s,l,d)=>`<button class="pick" data-act="reset-scope" data-scope="${s}" style="margin-bottom:9px"><span>${l}</span><span class="muted" style="font-size:12px;font-weight:400">${d}</span></button>`;
+    return sheet(sheetHead('รีเซ็ตข้อมูล')
+      +`<div class="muted" style="font-size:13px;margin-bottom:14px">เลือกช่วงเวลาที่จะลบ (ย้อนกลับไม่ได้)</div>`
+      +opt('all','ทั้งหมด','ลบประวัติทุกอย่าง + คืนโต๊ะว่าง')
+      +opt('year','ปีนี้','เฉพาะปี '+(new Date().getFullYear()+543))
+      +opt('month','เดือนนี้','เฉพาะเดือน '+monthLabel(today().slice(0,7)))
+      +opt('day','วันนี้','เฉพาะวันที่ '+today()));
+  }
+  if(m.type==='resetc1'){
+    return sheet(sheetHead('ยืนยันรีเซ็ต (1/2)')
+      +`<div style="font-size:14.5px;margin-bottom:8px">กำลังจะลบข้อมูล <b style="color:var(--red)">${resetScopeLabel(m.scope)}</b></div>`
+      +`<div class="muted" style="font-size:13px;margin-bottom:18px">${m.scope==='all'?'ประวัติบิล ยอดขาย ลิ้นชัก การจอง และ log ทั้งหมดจะถูกลบ และโต๊ะทุกตัวจะกลับเป็นว่าง':'ประวัติในช่วงที่เลือกจะถูกลบถาวร'} — ย้อนกลับไม่ได้</div>`
+      +`<button class="btn-danger" style="margin-bottom:10px" data-act="reset-c1-go" data-scope="${m.scope}">${I.trash} ยืนยัน ลบ${resetScopeLabel(m.scope)}</button>`
+      +`<button class="btn btn-ghost" data-act="modal-close">ยกเลิก</button>`);
+  }
+  if(m.type==='resetc2'){
+    return sheet(sheetHead('ยืนยันรีเซ็ต (2/2)')
+      +`<div class="muted" style="font-size:13px;margin-bottom:12px">ยืนยันอีกครั้ง และใส่รหัสเพื่อลบ <b style="color:var(--red)">${resetScopeLabel(m.scope)}</b></div>`
+      +`<input class="input" type="password" data-mfield="resetpw" placeholder="ใส่รหัสยืนยัน" style="margin-bottom:8px">`
+      +`<div style="color:var(--red);font-size:13px;margin-bottom:12px;display:${m.err?'block':'none'}">รหัสไม่ถูกต้อง</div>`
+      +`<button class="btn-danger" style="margin-bottom:10px" data-act="reset-c2-go" data-scope="${m.scope}">${I.trash} ลบข้อมูลเดี๋ยวนี้</button>`
+      +`<button class="btn btn-ghost" data-act="modal-close">ยกเลิก</button>`);
+  }
   if(m.type==='listedit'){const f=LIST_FIELDS[m.list];
     return sheet(sheetHead(m.isNew?'เพิ่ม '+m.title:'แก้ไข '+m.title)+f.map(([k,l,ty])=>`<div style="margin-bottom:12px"><div class="muted" style="font-size:12.5px;margin-bottom:6px">${l}</div><input class="input" data-mfield="${k}" inputmode="${ty==='number'?'decimal':'text'}" value="${esc(m.values[k]??'')}"></div>`).join('')+`<button class="btn btn-primary" style="margin-top:6px" data-act="modal-save">บันทึก</button>`);}
   if(m.type==='move'||m.type==='merge'){
@@ -1157,6 +1185,11 @@ app.addEventListener('click',e=>{
     case 'modal-close': modal=null; render(); break;
     case 'modal-save': saveListItem(); break;
     case 'clear-go': setStatus(modal.id,'available'); modal=null; save(); render(); break;
+    case 'reset-open': modal={type:'resetpick'}; render(); break;
+    case 'reset-scope': modal={type:'resetc1',scope:b.getAttribute('data-scope')}; render(); break;
+    case 'reset-c1-go': modal={type:'resetc2',scope:b.getAttribute('data-scope'),values:{}}; render(); break;
+    case 'reset-c2-go':{const sc=b.getAttribute('data-scope'); const pw=(modal.values&&modal.values.resetpw)||'';
+      if(pw==='Paulweber01'){doReset(sc);} else {modal.err=true; render();} break;}
 
     case 'resv-new': modal={type:'resv',values:{people:2,date:today(),time:'18:00'}}; render(); break;
     case 'resv-save': saveResv(); break;
@@ -1251,6 +1284,25 @@ function saveCloseout(){const counted=parseFloat(modal.values.counted)||0;const 
   db.closeouts.push({id:uid(),date:t,staffName:session.name,counted,expected:d.expected,diff:counted-d.expected,at:new Date().toISOString()});
   logAct('ปิดร้าน/นับเงิน',`นับได้ ${fmt(counted)} · ส่วนต่าง ${fmt(counted-d.expected)}`);modal=null;save();render();}
 
+function resetScopeLabel(s){return {all:'ทั้งหมด',year:'ปีนี้',month:'เดือนนี้',day:'วันนี้'}[s]||s;}
+function doReset(scope){
+  const t=today(), ym=t.slice(0,7), yr=t.slice(0,4);
+  const inScope=ds=>{ if(!ds)return false; if(scope==='all')return true; if(scope==='year')return ds.slice(0,4)===yr; if(scope==='month')return ds.slice(0,7)===ym; if(scope==='day')return ds===t; return false; };
+  if(scope==='all'){
+    db.bills=[]; db.closeouts=[]; db.cash=[]; db.logs=[]; db.shifts=[]; db.reservations=[];
+    db.counters={bill:0};
+    db.tables.forEach(x=>{x.status='available';});
+  }else{
+    db.bills=db.bills.filter(b=>b.status==='open'||!inScope(dateOf(b.closedAt)));
+    db.closeouts=db.closeouts.filter(c=>!inScope(c.date));
+    db.cash=db.cash.filter(c=>!inScope(dateOf(c.at)));
+    db.logs=db.logs.filter(l=>!inScope(dateOf(l.at)));
+    db.shifts=db.shifts.filter(s=>!inScope(dateOf(s.inAt)));
+    db.reservations=db.reservations.filter(r=>!inScope(r.date));
+  }
+  logAct('รีเซ็ตข้อมูล','ขอบเขต: '+resetScopeLabel(scope));
+  modal=null; billId=null; billView=null; overlay=null; view='floor'; save(); render();
+}
 function reopenBill(id){const b=db.bills.find(x=>x.id===id);b.status='open';b.saved=true;b.tableIds.forEach(tid=>{if((db.tables.find(t=>t.id===tid)||{}))setStatus(tid,'occupied');});billLog(b,'เปิดแก้ไขบิล','');modal=null;overlay=null;billView=null;billId=b.id;payStep=false;save();render();}
 function voidBill(id){const b=db.bills.find(x=>x.id===id);b.status='void';b.tableIds.forEach(tid=>{if((db.tables.find(t=>t.id===tid)||{}).status==='billing')setStatus(tid,'available');});billLog(b,'ยกเลิกบิล',fmt(b.total));modal=null;save();render();}
 
