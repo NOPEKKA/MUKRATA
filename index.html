@@ -610,6 +610,7 @@ function viewBilling(){
         <div style="display:flex;gap:8px"><button class="btn btn-primary btn-sm" style="flex:1" data-act="pay" data-m="cash">${I.cash} เงินสด</button>
           <button class="btn btn-ghost btn-sm" style="flex:1" data-act="pay-qr" data-m="transfer">${I.qr} โอน</button>
           <button class="btn btn-ghost btn-sm" style="flex:1" data-act="pay-qr" data-m="custom">${I.wallet} ${esc(db.settings.customName||'ช่องพิเศษ')}</button></div>
+        <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" data-act="pay-split">${I.users} คนละครึ่ง + โอน (แบ่งจ่าย)</button>
         <button class="link" style="justify-content:center;width:100%;margin-top:12px" data-act="pay-cancel">ยกเลิก</button>`}
     </div></div>`;
 }
@@ -621,7 +622,9 @@ function lineRow(name,sub,qty,kind,id){
 }
 
 /* ---------- RECEIPT ---------- */
-function payLabel(m){return m==='cash'?'เงินสด':m==='transfer'?'โอน':(m==='custom'||m==='qr')?(db.settings.customName||'ช่องพิเศษ'):'';}
+function payLabel(m){return m==='cash'?'เงินสด':m==='transfer'?'โอน':m==='split'?'คนละครึ่ง + โอน':(m==='custom'||m==='qr')?(db.settings.customName||'ช่องพิเศษ'):'';}
+// บิลแบ่งจ่ายโชว์ยอดแยก คนละครึ่ง/โอน ส่วนช่องอื่นโชว์ชื่อช่องปกติ
+function payText(b){if(b.paymentMethod==='split'){const p=b.pays||{};return `คนละครึ่ง ${fmt(p.kk)} · โอน ${fmt(p.tr)}`;}return payLabel(b.paymentMethod);}
 function viewReceipt(){
   const b=receipt;
   return `<div class="overlay" style="overflow:auto">
@@ -635,7 +638,7 @@ function viewReceipt(){
       ${b.lines.map(l=>`<div class="rc-line"><span>${esc(l.name)}<span class="q">× ${l.qty}</span></span><span>${fmt(l.amount)}</span></div>`).join('')}
       <div class="rc-div"></div>
       <div class="rc-total"><span class="muted" style="font-size:14px">รวมทั้งหมด</span><span class="v">${fmt(b.total)}</span></div>
-      <div class="rc-line" style="color:var(--muted)"><span>ชำระโดย</span><span>${payLabel(b.paymentMethod)}</span></div>
+      <div class="rc-line" style="color:var(--muted)"><span>ชำระโดย</span><span>${payText(b)}</span></div>
       <div class="rc-thanks">ขอบคุณที่ใช้บริการ</div></div></div>
     <div class="foot">
       <button class="btn btn-ghost" style="margin-bottom:10px" data-act="slip-qr" data-id="${b.id}">${I.qr} QR ให้ลูกค้าโหลดใบเสร็จ</button>
@@ -657,14 +660,14 @@ function receiptPNG(){
   g.strokeStyle='#ecebe7'; g.beginPath(); g.moveTo(pad,y-8); g.lineTo(W-pad,y-8); g.stroke(); y+=16;
   g.textAlign='left'; g.fillStyle='#9a938a'; g.font='14px sans-serif'; g.fillText('รวมทั้งหมด',pad,y);
   g.textAlign='right'; g.fillStyle='#1c1917'; g.font='700 24px sans-serif'; g.fillText(fmt(b.total),W-pad,y+4); y+=34;
-  g.textAlign='left'; g.fillStyle='#9a938a'; g.font='13px sans-serif'; g.fillText('ชำระโดย '+payLabel(b.paymentMethod),pad,y); y+=30;
+  g.textAlign='left'; g.fillStyle='#9a938a'; g.font='13px sans-serif'; g.fillText('ชำระโดย '+payText(b),pad,y); y+=30;
   g.textAlign='center'; g.fillText('ขอบคุณที่ใช้บริการ',W/2,y);
   const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='ใบเสร็จ-'+String(b.no).padStart(4,'0')+'.png'; a.click();
 }
 
 /* ---------- SLIP QR (ลูกค้าสแกนเปิดใบเสร็จแล้วโหลดเองได้) ---------- */
 // ย่อข้อมูลบิลให้สั้นที่สุด แล้วฝังลงลิงก์ (ไม่เก็บขึ้นเซิร์ฟเวอร์)
-function slipFromBill(b){return {s:db.settings.shopName,n:b.no,t:b.tableLabel,d:b.closedAt,o:b.openedByName||'',p:payLabel(b.paymentMethod),tot:b.total,l:(b.lines||[]).map(x=>[x.name,x.qty,x.amount])};}
+function slipFromBill(b){return {s:db.settings.shopName,n:b.no,t:b.tableLabel,d:b.closedAt,o:b.openedByName||'',p:payText(b),tot:b.total,l:(b.lines||[]).map(x=>[x.name,x.qty,x.amount])};}
 function slipUrl(b){const json=JSON.stringify(slipFromBill(b));const data=btoa(unescape(encodeURIComponent(json)));return location.origin+location.pathname+'#slip='+data;}
 function slipFromHash(){try{const h=location.hash||'';if(h.indexOf('#slip=')!==0)return null;return JSON.parse(decodeURIComponent(escape(atob(h.slice(6)))));}catch(e){return null;}}
 function renderSlipView(s){
@@ -710,6 +713,8 @@ function summaryData(){
   const cash=tb.filter(b=>b.paymentMethod==='cash').reduce((s,b)=>s+b.total,0);
   const transfer=tb.filter(b=>b.paymentMethod==='transfer').reduce((s,b)=>s+b.total,0);
   const qr=tb.filter(b=>b.paymentMethod==='custom'||b.paymentMethod==='qr').reduce((s,b)=>s+b.total,0);
+  const sb=tb.filter(b=>b.paymentMethod==='split');
+  const split={total:sb.reduce((s,b)=>s+b.total,0),kk:sb.reduce((s,b)=>s+((b.pays||{}).kk||0),0),tr:sb.reduce((s,b)=>s+((b.pays||{}).tr||0),0)};
   const days=[],wd=['อา','จ','อ','พ','พฤ','ศ','ส'];
   for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);const ds=dstr(d);
     days.push({lbl:wd[d.getDay()],val:paid.filter(b=>dateOf(b.closedAt)===ds).reduce((s,b)=>s+b.total,0),today:ds===t});}
@@ -722,7 +727,7 @@ function summaryData(){
   const hourMap={};
   paid.forEach(b=>{const h=new Date(b.closedAt).getHours(); hourMap[h]=(hourMap[h]||0)+b.total;});
   const peak=Object.entries(hourMap).map(([h,v])=>({h:+h,v})).sort((a,b)=>b.v-a.v).slice(0,3);
-  return {sales,heads,cash,transfer,qr,count:tb.length,days,sold,peak};
+  return {sales,heads,cash,transfer,qr,split,count:tb.length,days,sold,peak};
 }
 function viewSummary(){
   const d=summaryData(); const max=Math.max(1,...d.days.map(x=>x.val));
@@ -734,7 +739,9 @@ function viewSummary(){
     <div class="card" style="margin-bottom:12px"><div class="sec">ยอดขาย 7 วัน</div>
       <div class="bars">${d.days.map(x=>`<div class="col"><div class="bar ${x.today?'today':''}" style="height:${Math.round(x.val/max*100)}%"></div><div class="lbl">${x.lbl}</div></div>`).join('')}</div></div>
     <div class="card" style="margin-bottom:12px"><div class="sec">ช่องทางรับเงินวันนี้</div>
-      ${[['เงินสด',d.cash],['โอน',d.transfer],[(db.settings.customName||'ช่องพิเศษ'),d.qr]].map(([l,v])=>`<div style="display:flex;justify-content:space-between;font-size:14.5px;padding:6px 0"><span class="muted">${esc(l)}</span><span style="font-weight:600">${fmt(v)}</span></div>`).join('')}</div>
+      ${[['เงินสด',d.cash],['โอน',d.transfer],[(db.settings.customName||'ช่องพิเศษ'),d.qr]].map(([l,v])=>`<div style="display:flex;justify-content:space-between;font-size:14.5px;padding:6px 0"><span class="muted">${esc(l)}</span><span style="font-weight:600">${fmt(v)}</span></div>`).join('')}
+      ${d.split.total>0?`<div style="display:flex;justify-content:space-between;font-size:14.5px;padding:6px 0"><span class="muted">คนละครึ่ง + โอน</span><span style="font-weight:600">${fmt(d.split.total)}</span></div>
+        <div class="muted" style="font-size:12.5px;padding:0 0 4px 12px">คนละครึ่ง ${fmt(d.split.kk)} · โอน ${fmt(d.split.tr)}</div>`:''}</div>
     <div class="card" style="margin-bottom:12px"><div class="sec">เมนูที่ขายวันนี้</div>
       ${d.sold.length?d.sold.map((x,i)=>`<div style="display:flex;justify-content:space-between;font-size:14.5px;padding:7px 0;${i<d.sold.length-1?'border-bottom:1px solid var(--line2)':''}"><span>${esc(x.name)}</span><span class="muted">${x.qty} · ${fmt(x.amt)}</span></div>`).join(''):`<div class="muted" style="font-size:13.5px">ยังไม่มีการขาย</div>`}</div>
     <div class="card" style="margin-bottom:16px"><div class="sec">ช่วงเวลาขายดี</div>
@@ -747,14 +754,14 @@ function viewSummary(){
 }
 function closeDay(){const d=summaryData(); const t=today();
   db.closeouts=db.closeouts.filter(c=>c.date!==t);
-  db.closeouts.push({id:uid(),date:t,at:new Date().toISOString(),staffName:session.name,sales:d.sales,count:d.count,heads:d.heads,cash:d.cash,transfer:d.transfer,custom:d.qr});
+  db.closeouts.push({id:uid(),date:t,at:new Date().toISOString(),staffName:session.name,sales:d.sales,count:d.count,heads:d.heads,cash:d.cash,transfer:d.transfer,custom:d.qr,split:d.split.total});
   modal=null;save();render();}
 function summaryPNG(){
   const d=summaryData(); const cv=document.createElement('canvas'); cv.width=620;cv.height=360; const g=cv.getContext('2d');
   g.fillStyle='#fff'; g.fillRect(0,0,620,360);
   g.fillStyle='#1c1917'; g.font='700 24px sans-serif'; g.fillText('🔥 '+db.settings.shopName,28,48);
   g.fillStyle='#9a938a'; g.font='15px sans-serif'; g.fillText('สรุปยอดวันนี้ · '+today(),28,74);
-  const rows=[['ยอดขาย',fmt(d.sales)],['จำนวนบิล',d.count+' บิล'],['จำนวนหัว',d.heads+' หัว'],['เงินสด',fmt(d.cash)],['โอน / ช่องอื่น',fmt(d.transfer+d.qr)]];
+  const rows=[['ยอดขาย',fmt(d.sales)],['จำนวนบิล',d.count+' บิล'],['จำนวนหัว',d.heads+' หัว'],['เงินสด',fmt(d.cash)],['โอน / ช่องอื่น',fmt(d.transfer+d.qr+d.split.total)]];
   rows.forEach((r,i)=>{const y=126+i*44; g.textAlign='left';g.fillStyle='#9a938a';g.font='16px sans-serif';g.fillText(r[0],28,y);
     g.textAlign='right';g.fillStyle='#1c1917';g.font='700 19px sans-serif';g.fillText(r[1],592,y);});
   const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='สรุป-'+today()+'.png'; a.click();
@@ -781,8 +788,8 @@ function dashData(){
   const pkgN=new Set(db.packages.map(p=>p.name)); const menuMap={};
   paid.forEach(b=>(b.lines||[]).forEach(l=>{if(l.kind==='pkg'||pkgN.has(l.name))return;const s=menuMap[l.name]||{qty:0,amt:0};s.qty+=l.qty;s.amt+=l.amount;menuMap[l.name]=s;}));
   const menuTop=Object.entries(menuMap).map(([name,v])=>({name,qty:v.qty,amt:v.amt})).sort((a,b)=>b.qty-a.qty).slice(0,10);
-  const pm={cash:0,transfer:0,custom:0}; paid.forEach(b=>{const k=b.paymentMethod==='qr'?'custom':b.paymentMethod; if(pm[k]!=null)pm[k]+=b.total;});
-  const pmTotal=(pm.cash+pm.transfer+pm.custom)||1;
+  const pm={cash:0,transfer:0,custom:0,split:0}; paid.forEach(b=>{const k=b.paymentMethod==='qr'?'custom':b.paymentMethod; if(pm[k]!=null)pm[k]+=b.total;});
+  const pmTotal=(pm.cash+pm.transfer+pm.custom+pm.split)||1;
   const closeouts=db.closeouts.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,14);
   return {todaySales,ydSales,todayBills,todayHeads,monthSales,monthBills,monthHeads,tc,totalT,occPct,seatedHeads,openValue,resvToday,hours,menuTop,pm,pmTotal,closeouts,
     avgBill:todayBills?todaySales/todayBills:0, avgHead:todayHeads?todaySales/todayHeads:0};
@@ -830,8 +837,9 @@ function viewDashboard(){
       <div style="display:flex;height:10px;border-radius:6px;overflow:hidden;margin-bottom:12px;background:var(--line2)">
         <div style="width:${d.pm.cash/d.pmTotal*100}%;background:var(--green)"></div>
         <div style="width:${d.pm.transfer/d.pmTotal*100}%;background:var(--ink)"></div>
-        <div style="width:${d.pm.custom/d.pmTotal*100}%;background:var(--amber)"></div></div>
-      ${[['เงินสด',d.pm.cash,'--green'],['โอน',d.pm.transfer,'--ink'],[(db.settings.customName||'ช่องพิเศษ'),d.pm.custom,'--amber']].map(([l,v,c])=>`<div style="display:flex;justify-content:space-between;font-size:13.5px;padding:5px 0"><span style="display:flex;align-items:center;gap:7px"><i class="dot" style="background:var(${c})"></i>${esc(l)}</span><span style="font-weight:600">${fmt(v)} · ${Math.round(v/d.pmTotal*100)}%</span></div>`).join('')}</div>
+        <div style="width:${d.pm.custom/d.pmTotal*100}%;background:var(--amber)"></div>
+        <div style="width:${d.pm.split/d.pmTotal*100}%;background:var(--blue)"></div></div>
+      ${[['เงินสด',d.pm.cash,'--green'],['โอน',d.pm.transfer,'--ink'],[(db.settings.customName||'ช่องพิเศษ'),d.pm.custom,'--amber'],...(d.pm.split>0?[['คนละครึ่ง + โอน',d.pm.split,'--blue']]:[])].map(([l,v,c])=>`<div style="display:flex;justify-content:space-between;font-size:13.5px;padding:5px 0"><span style="display:flex;align-items:center;gap:7px"><i class="dot" style="background:var(${c})"></i>${esc(l)}</span><span style="font-weight:600">${fmt(v)} · ${Math.round(v/d.pmTotal*100)}%</span></div>`).join('')}</div>
 
     <div class="card"><div class="sec">ประวัติปิดร้านย้อนหลัง</div>
       ${d.closeouts.length?d.closeouts.map(c=>`<div class="listrow"><div><div style="font-size:14px;font-weight:500">${esc(c.date)}</div><div class="muted" style="font-size:12px;margin-top:2px">ปิด ${hhmm(c.at)} · ${esc(c.staffName)}</div></div><div style="font-weight:700">${fmt(c.sales)}</div></div>`).join(''):`<div class="muted" style="font-size:13.5px">ยังไม่มีการปิดร้าน</div>`}</div>
@@ -843,7 +851,7 @@ function periodData(mode,key){
   const match=b=>mode==='month'?dateOf(b.closedAt).slice(0,7)===key:dateOf(b.closedAt)===key;
   const bills=paid.filter(match);
   const sales=bills.reduce((s,b)=>s+b.total,0),count=bills.length,heads=bills.reduce((s,b)=>s+(b.heads||0),0);
-  const pm={cash:0,transfer:0,custom:0};bills.forEach(b=>{const k=b.paymentMethod==='qr'?'custom':b.paymentMethod;if(pm[k]!=null)pm[k]+=b.total;});
+  const pm={cash:0,transfer:0,custom:0,split:0};bills.forEach(b=>{const k=b.paymentMethod==='qr'?'custom':b.paymentMethod;if(pm[k]!=null)pm[k]+=b.total;});
   const pkgN=new Set(db.packages.map(p=>p.name));const mm={};
   bills.forEach(b=>(b.lines||[]).forEach(l=>{if(l.kind==='pkg'||pkgN.has(l.name))return;const s=mm[l.name]||{qty:0,amt:0};s.qty+=l.qty;s.amt+=l.amount;mm[l.name]=s;}));
   const menu=Object.entries(mm).map(([name,v])=>({name,qty:v.qty,amt:v.amt})).sort((a,b)=>b.qty-a.qty);
@@ -862,7 +870,7 @@ function drawReport(title,rows){
 }
 function periodPNG(mode,key){const p=periodData(mode,key);
   const rows=[['ยอดขาย',fmt(p.sales)],['จำนวนบิล',p.count+' บิล'],['จำนวนหัว',p.heads+' หัว'],['เฉลี่ยต่อบิล',fmt(p.count?Math.round(p.sales/p.count):0)],
-    ['— ช่องทางจ่าย —',''],['  เงินสด',fmt(p.pm.cash)],['  โอน',fmt(p.pm.transfer)],['  '+(db.settings.customName||'ช่องพิเศษ'),fmt(p.pm.custom)]];
+    ['— ช่องทางจ่าย —',''],['  เงินสด',fmt(p.pm.cash)],['  โอน',fmt(p.pm.transfer)],['  '+(db.settings.customName||'ช่องพิเศษ'),fmt(p.pm.custom)],...(p.pm.split>0?[['  คนละครึ่ง + โอน',fmt(p.pm.split)]]:[])];
   if(p.menu.length){rows.push(['— เมนูที่ขาย —','']); p.menu.slice(0,15).forEach(x=>rows.push(['  '+x.name,x.qty+' · '+fmt(x.amt)]));}
   drawReport(mode==='month'?'สรุปเดือน '+monthLabel(key):'สรุป '+dayLabel(key), rows);}
 function yearPNG(){const ch=chartData('12m');const total=ch.reduce((s,x)=>s+x.val,0);
@@ -917,7 +925,7 @@ function viewBillDetail(){
         ${(b.lines&&b.lines.length)?b.lines.map(l=>`<div class="rc-line"><span>${esc(l.name)}<span class="q">× ${l.qty}</span></span><span>${fmt(l.amount)}</span></div>`).join(''):`<div class="muted" style="font-size:13px">ไม่มีรายการ</div>`}
         <div class="rc-div"></div>
         <div class="rc-total"><span class="muted" style="font-size:14px">รวมทั้งหมด</span><span class="v">${fmt(b.total)}</span></div>
-        <div class="rc-line" style="color:var(--muted)"><span>ชำระโดย</span><span>${payLabel(b.paymentMethod)}</span></div>
+        <div class="rc-line" style="color:var(--muted)"><span>ชำระโดย</span><span>${payText(b)}</span></div>
       </div>
       <div class="pad" style="padding-top:0">
         <div class="sec">ประวัติการแก้ไข</div>
@@ -1064,7 +1072,7 @@ function viewModal(){
       +`<div style="font-size:30px;font-weight:700;margin-bottom:12px">${fmt(p.sales)}</div>`
       +line('จำนวนบิล',p.count+' บิล')+line('จำนวนหัว',p.heads+' หัว')+line('เฉลี่ยต่อบิล',fmt(p.count?Math.round(p.sales/p.count):0))
       +`<div class="rc-div"></div>`
-      +line('เงินสด',fmt(p.pm.cash))+line('โอน',fmt(p.pm.transfer))+line((db.settings.customName||'ช่องพิเศษ'),fmt(p.pm.custom))
+      +line('เงินสด',fmt(p.pm.cash))+line('โอน',fmt(p.pm.transfer))+line((db.settings.customName||'ช่องพิเศษ'),fmt(p.pm.custom))+(p.pm.split>0?line('คนละครึ่ง + โอน',fmt(p.pm.split)):'')
       +(p.menu.length?`<div class="rc-div"></div><div class="sec" style="margin-bottom:8px">เมนูที่ขาย</div>`+p.menu.slice(0,10).map(x=>`<div style="display:flex;justify-content:space-between;font-size:13.5px;padding:5px 0"><span>${esc(x.name)}</span><span class="muted">${x.qty} · ${fmt(x.amt)}</span></div>`).join(''):'')
       +`<button class="btn btn-primary" style="margin-top:16px" data-act="periodpng" data-mode="${m.mode}" data-k="${m.key}">${I.download} บันทึกภาพ</button>`);
   }
@@ -1075,7 +1083,7 @@ function viewModal(){
       +`<button class="btn btn-ghost" data-act="modal-close">กลับไปแก้ต่อ</button>`);
   }
   if(m.type==='closeday'){const d=summaryData();
-    const rows=[['ยอดขาย',fmt(d.sales)],['จำนวนบิล',d.count+' บิล'],['จำนวนหัว',d.heads+' หัว'],['เงินสด',fmt(d.cash)],['โอน',fmt(d.transfer)],[(db.settings.customName||'ช่องพิเศษ'),fmt(d.qr)]];
+    const rows=[['ยอดขาย',fmt(d.sales)],['จำนวนบิล',d.count+' บิล'],['จำนวนหัว',d.heads+' หัว'],['เงินสด',fmt(d.cash)],['โอน',fmt(d.transfer)],[(db.settings.customName||'ช่องพิเศษ'),fmt(d.qr)],...(d.split.total>0?[['คนละครึ่ง + โอน',fmt(d.split.total)]]:[])];
     return sheet(sheetHead('ปิดร้านวันนี้')
       +`<div class="muted" style="font-size:13.5px;margin-bottom:14px">สรุปยอดก่อนปิดร้าน · ${today()}</div>`
       +rows.map(r=>`<div style="display:flex;justify-content:space-between;font-size:14.5px;padding:7px 0;border-bottom:1px solid var(--line2)"><span class="muted">${esc(r[0])}</span><span style="font-weight:600">${r[1]}</span></div>`).join('')
@@ -1088,6 +1096,16 @@ function viewModal(){
       +`<button class="btn btn-primary" data-act="qrpay-confirm" data-m="${m.method}">${I.check} รับเงินแล้ว</button>`);
   }
   if(m.type==='clear')return sheet(sheetHead(esc(m.title))+`<div class="muted" style="font-size:14px;margin-bottom:18px">คิดเงินเรียบร้อยแล้ว เก็บโต๊ะให้ว่างไหม?</div><button class="btn btn-primary" data-act="clear-go">เคลียร์โต๊ะ · ทำให้ว่าง</button>`);
+  if(m.type==='splitpay'){
+    return sheet(sheetHead('คนละครึ่ง + โอน')
+      +`<div class="muted" style="font-size:13px;margin-bottom:12px">ยอดบิล <b style="color:var(--text)">${fmt(m.total)}</b> · บันทึกว่ารับเป็นคนละครึ่งเท่าไหร่ โอนเท่าไหร่ (เข้าบัญชีเดียวกัน)</div>`
+      +(db.settings.transferQR?`<img src="${db.settings.transferQR}" style="width:100%;max-width:200px;display:block;margin:0 auto 14px;border-radius:12px;border:1px solid var(--line)">`:'')
+      +`<div style="display:flex;gap:10px;margin-bottom:8px">
+        <div style="flex:1"><div class="muted" style="font-size:12.5px;margin-bottom:6px">คนละครึ่ง (฿)</div><input class="input" data-mfield="kk" inputmode="decimal" value="${esc(m.values.kk??'')}"></div>
+        <div style="flex:1"><div class="muted" style="font-size:12.5px;margin-bottom:6px">โอน (฿)</div><input class="input" data-mfield="tr" inputmode="decimal" value="${esc(m.values.tr??'')}"></div></div>`
+      +`<div id="splitchk" style="font-size:13px;margin-bottom:14px;min-height:18px"></div>`
+      +`<button class="btn btn-primary" id="splitgo" data-act="split-confirm">${I.check} รับเงินแล้ว</button>`);
+  }
   if(m.type==='slipqr'){
     return sheet(sheetHead('QR ใบเสร็จ สำหรับลูกค้า')
       +`<div class="muted" style="font-size:13px;margin-bottom:14px;text-align:center">ให้ลูกค้าสแกน จะเปิดใบเสร็จบนมือถือ แล้วกดบันทึกรูปได้เอง</div>`
@@ -1153,6 +1171,15 @@ function afterRender(){
   if(editorOpen)attachDrag('eplane','[data-etable]');
   if(mapOpen)attachMapEvents();
   if(modal&&modal.type==='slipqr')drawSlipQR();
+  if(modal&&modal.type==='splitpay')splitUpdate();
+}
+// เช็คว่า คนละครึ่ง + โอน = ยอดบิลพอดี ถึงจะกดรับเงินได้
+function splitParts(){const kk=Math.round((parseFloat(modal.values.kk)||0)*100)/100,tr=Math.round((parseFloat(modal.values.tr)||0)*100)/100;const diff=Math.round((modal.total-kk-tr)*100)/100;return {kk,tr,diff,ok:kk>=0&&tr>=0&&diff===0&&modal.total>0};}
+function splitUpdate(){
+  if(!modal||modal.type!=='splitpay')return;
+  const p=splitParts(),chk=document.getElementById('splitchk'),go=document.getElementById('splitgo');
+  if(chk){chk.textContent=p.diff===0?'✓ ยอดครบพอดี':(p.diff>0?'ยังขาดอีก '+fmt(p.diff):'เกินยอดบิล '+fmt(-p.diff));chk.style.color=p.diff===0?'var(--green)':'var(--red)';}
+  if(go)go.disabled=!p.ok;
 }
 function drawSlipQR(){
   const box=document.getElementById('slipqrbox'); if(!box)return; box.innerHTML='';
@@ -1236,6 +1263,8 @@ app.addEventListener('click',e=>{
     case 'pay': checkout(b.getAttribute('data-m')); break;
     case 'pay-qr':{const meth=b.getAttribute('data-m'); const name=meth==='transfer'?'โอน — สแกน QR':(db.settings.customName||'ช่องพิเศษ'); const img=meth==='transfer'?db.settings.transferQR:db.settings.customImg; modal={type:'qrpay',method:meth,name,img}; render(); break;}
     case 'qrpay-confirm': modal=null; checkout(b.getAttribute('data-m')); break;
+    case 'pay-split':{const tot=totals(curBill()).total;const kk=Math.round(tot/2);modal={type:'splitpay',total:tot,values:{kk:String(kk),tr:String(tot-kk)}};render();break;}
+    case 'split-confirm':{if(!modal||modal.type!=='splitpay')break;const p=splitParts();if(!p.ok)break;modal=null;checkout('split',{kk:p.kk,tr:p.tr});break;}
     case 'img-del':{const k=b.getAttribute('data-img'); db.settings[k]=''; save(); render(); break;}
     case 'op-move': modal={type:'move'}; render(); break;
     case 'op-merge': modal={type:'merge'}; render(); break;
@@ -1296,6 +1325,12 @@ app.addEventListener('input',e=>{
   else if(f==='customname'){db.settings.customName=e.target.value;save();}
   else if(f==='etlabel'){const t=db.tables.find(x=>x.id===editSel);if(t){t.label=e.target.value;save();}}
   const mf=e.target.getAttribute('data-mfield'); if(mf&&modal)modal.values[mf]=e.target.value;
+  if(mf&&modal&&modal.type==='splitpay'&&(mf==='kk'||mf==='tr')){
+    const other=mf==='kk'?'tr':'kk',rest=Math.max(0,Math.round((modal.total-(parseFloat(e.target.value)||0))*100)/100);
+    modal.values[other]=String(rest);
+    const oi=document.querySelector(`[data-mfield="${other}"]`);if(oi)oi.value=String(rest);
+    splitUpdate();
+  }
 });
 app.addEventListener('change',e=>{const mf=e.target.getAttribute('data-mfield'); if(mf&&modal)modal.values[mf]=e.target.value;
   const ik=e.target.getAttribute('data-img'); if(ik&&e.target.files&&e.target.files[0]){fileToThumb(e.target.files[0],url=>{db.settings[ik]=url;save();render();});}});
@@ -1330,13 +1365,14 @@ function doExit(){const b=curBill();
   if(!b.saved){db.bills=db.bills.filter(x=>x.id!==b.id);b.tableIds.forEach(id=>setStatus(id,'available'));}
   else {if(billBackup){b.pkg=JSON.parse(JSON.stringify(billBackup.pkg));b.itm=JSON.parse(JSON.stringify(billBackup.itm));b.svc=JSON.parse(JSON.stringify(billBackup.svc||{}));} b.tableIds.forEach(id=>setStatus(id,'occupied'));}
   billId=null;payStep=false;billEdited=false;billBackup=null;modal=null;save();render();}
-function checkout(method){const b=curBill();const {total,heads}=totals(b);
+function checkout(method,pays){const b=curBill();const {total,heads}=totals(b);
   const lines=[];db.packages.forEach(p=>{const q=b.pkg[p.id]||0;if(q)lines.push({name:p.name,qty:q,amount:q*p.price,kind:'pkg'});});
   db.menu.forEach(m=>{const q=b.itm[m.id]||0;if(q)lines.push({name:m.name,qty:q,amount:q*m.price,kind:'itm'});});
   (db.services||[]).forEach(v=>{const q=(b.svc||{})[v.id]||0;if(q)lines.push({name:v.name,qty:q,amount:q*v.price,kind:'svc'});});
   if(!b.no)b.no=++db.counters.bill;
   b.status='paid';b.closedAt=new Date().toISOString();b.paymentMethod=method;b.total=total;b.heads=heads;b.lines=lines;b.tableLabel=labelFor(b);
-  billLog(b,'คิดเงิน',`${fmt(total)} · ${payLabel(method)}`);
+  if(method==='split')b.pays={kk:pays.kk,tr:pays.tr};else delete b.pays;
+  billLog(b,'คิดเงิน',`${fmt(total)} · ${payText(b)}`);
   b.tableIds.forEach(id=>setStatus(id,'billing')); receipt=b; billId=null; payStep=false; save(); render();}
 function setStatus(tid,st){const t=db.tables.find(x=>x.id===tid);if(t)t.status=st;}
 
