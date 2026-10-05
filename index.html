@@ -624,6 +624,7 @@ function lineRow(name,sub,qty,kind,id){
 /* ---------- RECEIPT ---------- */
 function payLabel(m){return m==='cash'?'เงินสด':m==='transfer'?'โอน':m==='split'?'แบ่งจ่ายหลายช่องทาง':(m==='custom'||m==='qr')?(db.settings.customName||'ช่องพิเศษ'):'';}
 const PAY_KEYS=['cash','transfer','kk','custom'];
+const SPLIT_KEYS=['cash','transfer','custom'];
 function payKeyLabel(k){return k==='cash'?'เงินสด':k==='transfer'?'โอน':k==='kk'?'คนละครึ่ง':(db.settings.customName||'ช่องพิเศษ');}
 // แยกยอดของบิลตามช่องทางรับเงินจริง (บิลแบ่งจ่ายแตกเป็นหลายช่อง; บิลรุ่นเก่า pays.tr = โอน)
 function payAmounts(b){
@@ -1098,7 +1099,7 @@ function viewModal(){
         <button class="iconbtn" style="height:46px;padding:0 12px" data-act="split-rest" data-k="${k}">ที่เหลือ</button></div>`;
     return sheet(sheetHead('แบ่งจ่ายหลายช่องทาง')
       +`<div class="muted" style="font-size:13px;margin-bottom:12px">ยอดบิล <b style="color:var(--text)">${fmt(m.total)}</b> · ใส่ยอดที่รับในแต่ละช่องทาง (ช่องที่ไม่ใช้เว้นว่างได้) กด "ที่เหลือ" เพื่อเติมส่วนที่ยังขาด</div>`
-      +PAY_KEYS.map(row).join('')
+      +SPLIT_KEYS.map(row).join('')
       +`<div id="splitchk" style="font-size:13px;margin:4px 0 14px;min-height:18px"></div>`
       +`<button class="btn btn-primary" id="splitgo" data-act="split-confirm">${I.check} รับเงินแล้ว</button>`);
   }
@@ -1170,7 +1171,7 @@ function afterRender(){
   if(modal&&modal.type==='splitpay')splitUpdate();
 }
 // เช็คว่า คนละครึ่ง + โอน = ยอดบิลพอดี ถึงจะกดรับเงินได้
-function splitParts(){const v={};let sum=0,neg=false;PAY_KEYS.forEach(k=>{const n=Math.round((parseFloat(modal.values[k])||0)*100)/100;if(n<0)neg=true;v[k]=n;sum+=n;});const diff=Math.round((modal.total-sum)*100)/100;return {v,diff,ok:!neg&&diff===0&&modal.total>0};}
+function splitParts(){const v={};let sum=0,neg=false;SPLIT_KEYS.forEach(k=>{const n=Math.round((parseFloat(modal.values[k])||0)*100)/100;if(n<0)neg=true;v[k]=n;sum+=n;});const diff=Math.round((modal.total-sum)*100)/100;return {v,diff,ok:!neg&&diff===0&&modal.total>0};}
 function splitUpdate(){
   if(!modal||modal.type!=='splitpay')return;
   const p=splitParts(),chk=document.getElementById('splitchk'),go=document.getElementById('splitgo');
@@ -1259,9 +1260,9 @@ app.addEventListener('click',e=>{
     case 'pay': checkout(b.getAttribute('data-m')); break;
     case 'pay-qr':{const meth=b.getAttribute('data-m'); const name=meth==='transfer'?'โอน — สแกน QR':(db.settings.customName||'ช่องพิเศษ'); const img=meth==='transfer'?db.settings.transferQR:db.settings.customImg; modal={type:'qrpay',method:meth,name,img}; render(); break;}
     case 'qrpay-confirm': modal=null; checkout(b.getAttribute('data-m')); break;
-    case 'pay-split':{modal={type:'splitpay',total:totals(curBill()).total,values:{cash:'',transfer:'',kk:'',custom:''}};render();break;}
+    case 'pay-split':{modal={type:'splitpay',total:totals(curBill()).total,values:{cash:'',transfer:'',custom:''}};render();break;}
     case 'split-rest':{if(!modal||modal.type!=='splitpay')break;const k=b.getAttribute('data-k');
-      const others=PAY_KEYS.filter(x=>x!==k).reduce((s,x)=>s+(parseFloat(modal.values[x])||0),0);
+      const others=SPLIT_KEYS.filter(x=>x!==k).reduce((s,x)=>s+(parseFloat(modal.values[x])||0),0);
       const rest=Math.max(0,Math.round((modal.total-others)*100)/100);
       modal.values[k]=rest?String(rest):'';
       const inp=document.querySelector(`[data-mfield="${k}"]`);if(inp)inp.value=modal.values[k];
