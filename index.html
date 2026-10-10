@@ -312,8 +312,9 @@ const DEFAULT={
   counters:{bill:0},
   staff:[{id:'u1',name:'เจ้าของร้าน',role:'owner',pin:'1234'},{id:'u2',name:'พนักงาน A',role:'staff',pin:'1111'}],
   packages:[{id:'p1',name:'ผู้ใหญ่',price:199},{id:'p2',name:'เด็ก',price:99},{id:'p3',name:'โปรวันธรรมดา',price:179},{id:'pmem',name:'ลูกค้าสมาชิก',price:199,member:true}],
-  banks:SEED_BANKS(), memberItems:SEED_MEMBER_ITEMS(),
-  menu:[{id:'m1',name:'น้ำเปล่า',price:10,category:'เครื่องดื่ม'},{id:'m2',name:'น้ำอัดลม',price:20,category:'เครื่องดื่ม'},{id:'m3',name:'ไอศกรีม',price:15,category:'ของหวาน'},{id:'m4',name:'ไข่ไก่ (เพิ่ม)',price:10,category:'ท็อปปิ้ง'}],
+  banks:SEED_BANKS(), memberItems:[],
+  menu:[{id:'m1',name:'น้ำเปล่า',price:10,category:'เครื่องดื่ม',memberFree:true},{id:'m2',name:'น้ำอัดลม',price:20,category:'เครื่องดื่ม'},{id:'m3',name:'ไอศกรีม',price:15,category:'ของหวาน'},{id:'m4',name:'ไข่ไก่ (เพิ่ม)',price:10,category:'ท็อปปิ้ง'},
+    {id:'m5',name:'น้ำแข็ง',price:10,category:'เครื่องดื่ม',memberFree:true},{id:'m6',name:'เป๊ปซี่ขวดเล็ก',price:15,category:'เครื่องดื่ม',memberFree:true}],
   services:[{id:'sv1',name:'เปลี่ยนกระทะ',price:20},{id:'sv2',name:'เปิดเตา',price:20}],
   tables:(()=>{const a=[],COLS=10;for(let i=0;i<60;i++){const col=i%COLS,row=Math.floor(i/COLS);a.push({id:'t'+(i+1),label:String(i+1),seats:4,x:20+col*112,y:20+row*100,status:'available'});}return a;})(),
   bills:[], reservations:[], cash:[], closeouts:[], shifts:[], logs:[], mapItems:[]
@@ -348,8 +349,18 @@ function normalizeDb(){
   // เติมค่าตั้งต้นให้ร้านที่มีข้อมูลอยู่ก่อนแล้ว ทำครั้งเดียว (ธงใน settings กันไม่ให้ของที่ลบไปแล้วกลับมา)
   if(!db.settings.banksSeeded){ if(!db.banks.length)db.banks=SEED_BANKS(); db.settings.banksSeeded=true; }
   if(!db.settings.memberSeeded){ if(!db.memberItems.length)db.memberItems=SEED_MEMBER_ITEMS(); db.settings.memberSeeded=true; }
+  linkLegacyFreeItems();
   if(!db.packages.some(p=>p.member))db.packages.push({id:'pmem',name:'ลูกค้าสมาชิก',price:(db.packages[0]||{}).price||0,member:true});
   db.bills.forEach(b=>{ if(!b.pkg)b.pkg={}; if(!b.itm)b.itm={}; if(!b.svc)b.svc={}; if(!b.free)b.free={}; if(!b.tableIds)b.tableIds=[]; });
+}
+// ของแจกสมาชิกเลือกจากเมนูสั่งเพิ่ม (menu.memberFree) · รายการแบบพิมพ์ชื่อรุ่นก่อนที่ชื่อตรงกับเมนูจะถูกย้ายมาผูกกับเมนูนั้น
+function linkLegacyFreeItems(){
+  db.memberItems=db.memberItems.filter(f=>{
+    const m=db.menu.find(x=>x.name===f.name); if(!m)return true;
+    m.memberFree=true;
+    db.bills.forEach(b=>{if(b.free&&b.free[f.id]){b.free[m.id]=(b.free[m.id]||0)+b.free[f.id];delete b.free[f.id];}});
+    return false;
+  });
 }
 function enterTestMode(){
   if(testMode)return;
@@ -619,6 +630,8 @@ function totals(b){
 }
 // จำนวนหัวที่เป็นลูกค้าสมาชิกในบิล (มี >0 ถึงจะกดของแจกสมาชิกได้)
 function memberHeads(b){const pkg=b.pkg||{};return db.packages.reduce((s,p)=>s+(p.member?(pkg[p.id]||0):0),0);}
+// ของแจกสมาชิก = เมนูที่ถูกเพิ่มเข้าของแจก + รายการรุ่นก่อนที่ยังไม่มีในเมนู (เหลือไว้ให้ลบออกได้อย่างเดียว)
+function memberFreeList(){return db.menu.filter(m=>m.memberFree).map(m=>({key:m.id,name:m.name})).concat(db.memberItems.map(f=>({key:f.id,name:f.name})));}
 // นับยอดขายสะสมต่อชื่อรายการ (จากบิลที่ปิดแล้ว) ใช้เรียงของขายดีขึ้นบน
 function soldCountByKind(kind){const m={};db.bills.forEach(b=>{if(b.status!=='paid')return;(b.lines||[]).forEach(l=>{if(l.kind===kind)m[l.name]=(m[l.name]||0)+l.qty;});});return m;}
 function byBestSelling(list,kind){const s=soldCountByKind(kind);return [...list].sort((a,b)=>(s[b.name]||0)-(s[a.name]||0));}
@@ -635,8 +648,8 @@ function viewBilling(){
       </div>
       <div class="sec">บุฟเฟต์ · จำนวนหัว</div>
       <div class="card" style="padding:2px 18px;margin-bottom:18px">${db.packages.map(p=>lineRow(p.name,fmt(p.price)+' / หัว',b.pkg[p.id]||0,'pkg',p.id)).join('')}</div>
-      ${(memberHeads(b)>0&&db.memberItems.length)?`<div class="sec">ของสมาชิก · ฟรี</div>
-      <div class="card" style="padding:2px 18px;margin-bottom:18px">${db.memberItems.map(f=>lineRow(f.name,'สมาชิก · ฿0',(b.free||{})[f.id]||0,'free',f.id)).join('')}</div>`:''}
+      ${(memberHeads(b)>0&&memberFreeList().length)?`<div class="sec">ของสมาชิก · ฟรี</div>
+      <div class="card" style="padding:2px 18px;margin-bottom:18px">${memberFreeList().map(f=>lineRow(f.name,'สมาชิก · ฿0',(b.free||{})[f.key]||0,'free',f.key)).join('')}</div>`:''}
       <div class="sec">เมนูสั่งเพิ่ม</div>
       <div class="card" style="padding:2px 18px${(db.services&&db.services.length)?';margin-bottom:18px':''}">${byBestSelling(db.menu,'itm').map(m=>lineRow(m.name,esc(m.category)+' · '+fmt(m.price),b.itm[m.id]||0,'itm',m.id)).join('')}</div>
       ${(db.services&&db.services.length)?`<div class="sec">บริการ</div>
@@ -1070,8 +1083,9 @@ function viewSettings(){
       <div><div style="font-size:15px;font-weight:600">ผังร้าน (MAP)</div><div class="muted" style="font-size:12.5px;margin-top:3px">${(db.mapItems||[]).length} วัตถุ · วาดผังร้านด้วยรูปทรง</div></div>
       <button class="iconbtn" data-act="map-open">${I.edit} วาดผัง</button></div>
     ${editList('แพ็กเกจบุฟเฟต์','packages',p=>`${esc(p.name)} · ${fmt(p.price)}${p.member?' <span class="muted" style="font-size:12px">· หัวสมาชิก</span>':''}`)}
-    ${editList('ของแจกลูกค้าสมาชิก · ฿0','memberItems',f=>esc(f.name))}
-    ${editList('เมนูสั่งเพิ่ม','menu',m=>`${esc(m.name)} · ${fmt(m.price)}`)}
+    ${freeListCard()}
+    ${editList('เมนูสั่งเพิ่ม','menu',m=>`${esc(m.name)} · ${fmt(m.price)}`,false,
+      m=>`<button class="iconbtn" style="white-space:nowrap;${m.memberFree?'color:var(--green);border-color:var(--green)':''}" data-act="free-toggle" data-id="${m.id}" title="ของแจกลูกค้าสมาชิก">${m.memberFree?'✓ ของแจก':'+ ของแจก'}</button>`)}
     ${editList('บริการ','services',v=>`${esc(v.name)} · ${fmt(v.price)}`)}
     ${editList('ธนาคาร · เลือกหลังรับเงินโอน','banks',v=>esc(v.name))}
     ${editList('พนักงาน','staff',s=>`${esc(s.name)} · ${s.role==='owner'?'เจ้าของ':'พนักงาน'}`,true)}
@@ -1085,20 +1099,31 @@ function viewSettings(){
       ${testMode?`<button class="btn btn-ghost btn-sm" data-act="test-exit">ออกจากโหมดทดสอบ</button>`
         :`<button class="btn btn-ghost btn-sm" data-act="test-open">เข้าโหมดทดสอบ</button>`}</div></div>`;
 }
-function editList(title,key,render,protect){
+// re-render ทั้งหน้าแล้วคืนตำแหน่งเลื่อนของหน้าหลัก ไม่ให้เด้งกลับบนสุด
+function keepMainScroll(fn){const s=document.querySelector('#app > .content');const y=s?s.scrollTop:0;fn();const s2=document.querySelector('#app > .content');if(s2)s2.scrollTop=y;}
+// ของแจกสมาชิก: ที่นี่ลบออกได้อย่างเดียว การเพิ่มทำจากปุ่ม "+ ของแจก" ในรายการเมนูสั่งเพิ่ม
+function freeListCard(){
+  const list=memberFreeList();
+  return `<div class="card" style="margin-bottom:14px">
+    <div class="sec" style="margin-bottom:6px">ของแจกลูกค้าสมาชิก · ฿0</div>
+    <div class="muted" style="font-size:12.5px;margin-bottom:6px">เพิ่มได้ที่ “เมนูสั่งเพิ่ม” โดยกดปุ่ม “+ ของแจก” ที่เมนูนั้น</div>
+    ${list.length?list.map(f=>`<div class="listrow"><span style="font-size:14.5px">${esc(f.name)}</span>
+      <button class="iconbtn" style="color:var(--red);white-space:nowrap;flex-shrink:0" data-act="free-remove" data-key="${f.key}">${I.trash} ลบออก</button></div>`).join('')
+      :`<div class="muted" style="font-size:13.5px;padding:8px 0">ยังไม่มีของแจก</div>`}</div>`;
+}
+function editList(title,key,render,protect,extra){
   return `<div class="card" style="margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
       <div class="sec" style="margin:0">${title}</div>
       <button class="link" style="color:var(--ink);font-weight:600" data-act="edit-new" data-list="${key}">${I.plus} เพิ่ม</button></div>
-    ${db[key].map((it,idx)=>`<div class="listrow"><span style="font-size:14.5px">${render(it)}</span>
-      <div style="display:flex;gap:8px"><button class="iconbtn" data-act="edit-item" data-list="${key}" data-id="${it.id}">แก้</button>
+    ${db[key].map((it,idx)=>`<div class="listrow"><span style="font-size:14.5px;min-width:0">${render(it)}</span>
+      <div style="display:flex;gap:8px;flex-shrink:0;margin-left:8px">${extra?extra(it):''}<button class="iconbtn" data-act="edit-item" data-list="${key}" data-id="${it.id}">แก้</button>
       ${(protect&&idx===0)||it.member?'':`<button class="iconbtn" style="color:var(--red)" data-act="edit-del" data-list="${key}" data-id="${it.id}">${I.trash}</button>`}</div></div>`).join('')}</div>`;
 }
 const LIST_FIELDS={packages:[['name','ชื่อ','text'],['price','ราคา/หัว','number']],
   menu:[['name','ชื่อ','text'],['price','ราคา','number'],['category','หมวด','text']],
   services:[['name','ชื่อบริการ','text'],['price','ราคา','number']],
   banks:[['name','ชื่อธนาคาร','text']],
-  memberItems:[['name','ชื่อของแจก (ใช้ชื่อเดียวกับเมนูเพื่อให้จำนวนไปรวมกัน)','text']],
   staff:[['name','ชื่อ','text'],['pin','PIN (เว้นว่างได้ = เข้าได้เลยไม่ต้องใส่รหัส)','text']]};
 
 /* ---------- TABLE EDITOR ---------- */
@@ -1387,6 +1412,10 @@ app.addEventListener('click',e=>{
     case 'edit-new': openListEditor(list,null); break;
     case 'edit-item': openListEditor(list,db[list].find(x=>x.id===id)); break;
     case 'edit-del': db[list]=db[list].filter(x=>x.id!==id); save(); render(); break;
+    case 'free-toggle':{const fm=db.menu.find(x=>x.id===id);if(fm){if(fm.memberFree)delete fm.memberFree;else fm.memberFree=true;keepMainScroll(()=>{save();render();});}break;}
+    case 'free-remove':{const fk=b.getAttribute('data-key');const fm=db.menu.find(x=>x.id===fk);
+      if(fm)delete fm.memberFree;else db.memberItems=db.memberItems.filter(x=>x.id!==fk);
+      keepMainScroll(()=>{save();render();});break;}
     case 'modal-close': modal=null; render(); break;
     case 'modal-save': saveListItem(); break;
     case 'clear-go': setStatus(modal.id,'available'); modal=null; save(); render(); break;
@@ -1459,7 +1488,7 @@ function doExit(){const b=curBill();
 function checkout(method,pays,bank){const b=curBill();const {total,heads}=totals(b);
   const lines=[];db.packages.forEach(p=>{const q=b.pkg[p.id]||0;if(q)lines.push({name:p.name,qty:q,amount:q*p.price,kind:'pkg'});});
   // ของแจกสมาชิก: ราคา 0 แต่เป็น kind 'itm' ชื่อเดียวกับเมนู จำนวนจึงไปรวมกับเมนูสั่งเพิ่มในรายงาน
-  if(memberHeads(b)>0)db.memberItems.forEach(f=>{const q=(b.free||{})[f.id]||0;if(q)lines.push({name:f.name,qty:q,amount:0,kind:'itm',free:true});});
+  if(memberHeads(b)>0)memberFreeList().forEach(f=>{const q=(b.free||{})[f.key]||0;if(q)lines.push({name:f.name,qty:q,amount:0,kind:'itm',free:true});});
   db.menu.forEach(m=>{const q=b.itm[m.id]||0;if(q)lines.push({name:m.name,qty:q,amount:q*m.price,kind:'itm'});});
   (db.services||[]).forEach(v=>{const q=(b.svc||{})[v.id]||0;if(q)lines.push({name:v.name,qty:q,amount:q*v.price,kind:'svc'});});
   if(!b.no)b.no=++db.counters.bill;
@@ -1472,14 +1501,14 @@ function setStatus(tid,st){const t=db.tables.find(x=>x.id===tid);if(t)t.status=s
 
 function doMove(target){const b=curBill();const old=b.tableIds.slice();old.forEach(id=>setStatus(id,'available'));b.tableIds=[target];b.tableLabel=labelFor(b);setStatus(target,'occupied');billLog(b,'ย้ายโต๊ะ',`${old.map(i=>(db.tables.find(t=>t.id===i)||{}).label).join('+')} → ${b.tableLabel}`);modal=null;save();render();}
 function doMerge(target){const b=curBill();const other=db.bills.find(x=>x.status==='open'&&x.tableIds.includes(target)&&x.id!==b.id);
-  if(other){if(!b.svc)b.svc={};const osvc=other.svc||{};db.packages.forEach(p=>{if(other.pkg[p.id])b.pkg[p.id]=(b.pkg[p.id]||0)+other.pkg[p.id];});db.menu.forEach(m=>{if(other.itm[m.id])b.itm[m.id]=(b.itm[m.id]||0)+other.itm[m.id];});(db.services||[]).forEach(v=>{if(osvc[v.id])b.svc[v.id]=(b.svc[v.id]||0)+osvc[v.id];});if(!b.free)b.free={};const ofree=other.free||{};db.memberItems.forEach(f=>{if(ofree[f.id])b.free[f.id]=(b.free[f.id]||0)+ofree[f.id];});other.tableIds.forEach(id=>{if(!b.tableIds.includes(id))b.tableIds.push(id);});db.bills=db.bills.filter(x=>x.id!==other.id);}
+  if(other){if(!b.svc)b.svc={};const osvc=other.svc||{};db.packages.forEach(p=>{if(other.pkg[p.id])b.pkg[p.id]=(b.pkg[p.id]||0)+other.pkg[p.id];});db.menu.forEach(m=>{if(other.itm[m.id])b.itm[m.id]=(b.itm[m.id]||0)+other.itm[m.id];});(db.services||[]).forEach(v=>{if(osvc[v.id])b.svc[v.id]=(b.svc[v.id]||0)+osvc[v.id];});if(!b.free)b.free={};const ofree=other.free||{};Object.keys(ofree).forEach(k=>{b.free[k]=(b.free[k]||0)+ofree[k];});other.tableIds.forEach(id=>{if(!b.tableIds.includes(id))b.tableIds.push(id);});db.bills=db.bills.filter(x=>x.id!==other.id);}
   else if(!b.tableIds.includes(target))b.tableIds.push(target);
   b.tableLabel=labelFor(b);b.tableIds.forEach(id=>setStatus(id,'occupied'));billLog(b,'รวมโต๊ะ',b.tableLabel);modal=null;save();render();}
 function doSplit(id){const b=curBill();if(b.tableIds.length<=1){modal=null;render();return;}b.tableIds=b.tableIds.filter(x=>x!==id);setStatus(id,'available');b.tableLabel=labelFor(b);billLog(b,'แยกโต๊ะ',(db.tables.find(t=>t.id===id)||{}).label+' ออก');modal=null;save();render();}
 
-function openListEditor(key,item){const blank={packages:{name:'',price:0},menu:{name:'',price:0,category:'อื่นๆ'},services:{name:'',price:0},banks:{name:''},memberItems:{name:''},staff:{name:'',pin:'',role:'staff'}}[key];
-  modal={type:'listedit',list:key,title:{packages:'แพ็กเกจ',menu:'เมนู',services:'บริการ',banks:'ธนาคาร',memberItems:'ของแจกสมาชิก',staff:'พนักงาน'}[key],isNew:!item,values:item?{...item}:{...blank,id:uid()}};render();}
-function saveListItem(){const v={...modal.values};LIST_FIELDS[modal.list].forEach(([k,,ty])=>{if(ty==='number')v[k]=parseFloat(v[k])||0;});if(!v.name){modal=null;render();return;}const arr=db[modal.list];const i=arr.findIndex(x=>x.id===v.id);if(i>=0)arr[i]=v;else arr.push(v);modal=null;save();render();}
+function openListEditor(key,item){const blank={packages:{name:'',price:0},menu:{name:'',price:0,category:'อื่นๆ'},services:{name:'',price:0},banks:{name:''},staff:{name:'',pin:'',role:'staff'}}[key];
+  modal={type:'listedit',list:key,title:{packages:'แพ็กเกจ',menu:'เมนู',services:'บริการ',banks:'ธนาคาร',staff:'พนักงาน'}[key],isNew:!item,values:item?{...item}:{...blank,id:uid()}};render();}
+function saveListItem(){const v={...modal.values};LIST_FIELDS[modal.list].forEach(([k,,ty])=>{if(ty==='number')v[k]=parseFloat(v[k])||0;});if(!v.name){modal=null;render();return;}const arr=db[modal.list];const i=arr.findIndex(x=>x.id===v.id);if(i>=0)arr[i]=v;else arr.push(v);if(modal.list==='menu')linkLegacyFreeItems();modal=null;save();render();}
 
 function saveResv(){const v=modal.values;if(!v.name){modal=null;render();return;}
   const r={id:uid(),name:v.name,phone:v.phone||'',people:parseInt(v.people)||1,date:v.date||today(),time:v.time||'',note:v.note||'',tableId:v.tableId||'',status:'booked',createdAt:new Date().toISOString()};
