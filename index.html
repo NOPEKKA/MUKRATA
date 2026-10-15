@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=resizes-content">
 <title>ร้านหมูกระทะ — POS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -75,7 +75,7 @@
   body.wide .pad.gcols .sec{font-size:12.5px;}
   body.wide .pad.gcols .menucard{padding:24px 26px;}
   body.wide .receipt{max-width:520px; margin-left:auto; margin-right:auto;}
-  body.wide .sheet{top:50%; bottom:auto; left:50%; right:auto; transform:translate(-50%,-50%); width:min(480px,calc(100% - 48px)); border-radius:20px; box-shadow:0 20px 60px rgba(0,0,0,.22);}
+  body.wide .sheet{top:calc(var(--vvt,0px) + var(--vvh,100vh) / 2); bottom:auto; left:50%; right:auto; transform:translate(-50%,-50%); width:min(480px,calc(100% - 48px)); max-height:calc(var(--vvh,100vh) - 32px); border-radius:20px; box-shadow:0 20px 60px rgba(0,0,0,.22);}
   .table{position:absolute; width:92px; height:80px; border-radius:16px; box-sizing:border-box; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; user-select:none; touch-action:none; border:1px solid transparent; transition:transform .08s;}
   .table:active{transform:scale(.97);}
   .table .num{font-size:22px; font-weight:700; line-height:1.1; letter-spacing:-.02em;}
@@ -135,7 +135,8 @@
 
   .overlay{position:fixed; inset:0; background:var(--bg); z-index:30; display:flex; flex-direction:column; max-width:460px; margin:0 auto;}
   .scrim{position:fixed; inset:0; background:rgba(28,25,23,.4); z-index:40;}
-  .sheet{position:fixed; left:0; right:0; bottom:0; max-width:460px; margin:0 auto; background:var(--surface); z-index:41; border-radius:24px 24px 0 0; padding:22px 20px calc(22px + env(safe-area-inset-bottom)); box-shadow:0 -10px 40px rgba(0,0,0,.12); max-height:84vh; overflow:auto;}
+  /* --kb/--vvh/--vvt มาจาก visualViewport ตอนแป้นพิมพ์มือถือเปิด: ยกแผ่นล่างขึ้นเหนือแป้นพิมพ์ */
+  .sheet{position:fixed; left:0; right:0; bottom:var(--kb,0px); max-width:460px; margin:0 auto; background:var(--surface); z-index:41; border-radius:24px 24px 0 0; padding:22px 20px calc(22px + env(safe-area-inset-bottom)); box-shadow:0 -10px 40px rgba(0,0,0,.12); max-height:calc(var(--vvh,100vh) * .84); overflow:auto;}
   .sheet h3{margin:0 0 16px; font-size:17px; font-weight:700; display:flex; justify-content:space-between; align-items:center;}
   .foot{border-top:1px solid var(--line); padding:16px 20px calc(16px + env(safe-area-inset-bottom)); background:var(--bg);}
   .center{flex:1; display:flex; align-items:center; justify-content:center; color:var(--muted); text-align:center; padding:24px; font-size:13.5px;}
@@ -426,7 +427,18 @@ function billLog(b,action,detail){
 
 /* ============ RENDER ============ */
 function testBar(){return testMode?`<div class="testbar"><span>โหมดทดสอบ · ไม่บันทึกข้อมูลจริง</span><button data-act="test-exit">ออก</button></div>`:'';}
+// ตำแหน่งเลื่อนจำแยกตามหน้าจอ: render ซ้ำหน้าเดิม (กดปุ่ม/บันทึก/ข้อมูลจากเครื่องอื่น) แล้วไม่เด้งกลับบนสุด
+const SCROLL_SELS=['#app > .content','#canvas','#ecanvas','#app > .overlay','#app > .overlay .content'];
+const scrollMemo={}; let lastScreen=null;
+function screenKey(){return [session?session.id:'',view,billId||'',receipt?receipt.id:'',overlay||'',billView||'',editorOpen?1:0,mapOpen?1:0].join('|');}
 function render(){
+  if(lastScreen)scrollMemo[lastScreen]=SCROLL_SELS.map(s=>{const e=document.querySelector(s);return e?[e.scrollTop,e.scrollLeft]:null;});
+  lastScreen=screenKey();
+  renderScreen();
+  const keep=scrollMemo[lastScreen];
+  if(keep)SCROLL_SELS.forEach((s,i)=>{const e=document.querySelector(s);if(e&&keep[i]){e.scrollTop=keep[i][0];e.scrollLeft=keep[i][1];}});
+}
+function renderScreen(){
   if(!session){app.innerHTML=testBar()+viewLogin()+(modal&&modal.type==='testexit'?viewModal():''); afterRender(); return;}
   const owner=session.role==='owner';
   const tabs=owner?[['floor','ผังโต๊ะ',I.grid],['more','เพิ่มเติม',I.more],['summary','สรุป',I.chart],['dashboard','แดชบอร์ด',I.dash]]
@@ -663,7 +675,7 @@ function viewBilling(){
           ${b.saved?`<button class="btn btn-primary" style="flex:1.5" data-act="pay-start" ${total===0?'disabled':''}>${I.receipt} คิดเงิน</button>`:''}</div>
         ${!b.saved?`<div class="muted" style="font-size:12.5px;text-align:center;margin-top:10px">บันทึกออเดอร์ก่อน แล้วเปิดโต๊ะอีกครั้งเพื่อคิดเงิน</div>`:''}`
       :`<div class="muted" style="font-size:13px;margin-bottom:10px">รับเงินแบบไหน?</div>
-        <div style="display:flex;gap:8px"><button class="btn btn-primary btn-sm" style="flex:1" data-act="pay" data-m="cash">${I.cash} เงินสด</button>
+        <div style="display:flex;gap:8px"><button class="btn btn-primary btn-sm" style="flex:1" data-act="pay-cash">${I.cash} เงินสด</button>
           <button class="btn btn-ghost btn-sm" style="flex:1" data-act="pay-qr" data-m="transfer">${I.qr} โอน</button>
           <button class="btn btn-ghost btn-sm" style="flex:1" data-act="pay-qr" data-m="custom">${I.wallet} ${esc(db.settings.customName||'ช่องพิเศษ')}</button></div>
         <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:8px" data-act="pay-split">${I.users} แบ่งจ่ายหลายช่องทาง</button>
@@ -697,9 +709,12 @@ function banksByUse(){const m={};db.bills.forEach(b=>{if(b.status==='paid'&&b.ba
 // ของแจกสมาชิกใช้ชื่อเดียวกับเมนูเพื่อให้จำนวนไปรวมกัน เวลาแสดงจึงต่อท้ายให้รู้ว่าเป็นของฟรี
 function lineName(l){return l.name+(l.free?' (สมาชิก)':'');}
 // บรรทัด "ชำระโดย" ในใบเสร็จ: บิลแบ่งจ่ายแตกเป็นหลายบรรทัดตามช่องทาง
+// บิลเงินสดที่ใส่ยอดรับมา: แสดงยอดรับและเงินทอนใต้ "ชำระโดย"
+function cashRows(b){return b.paymentMethod==='cash'&&b.cashIn!=null?[['รับเงินมา',b.cashIn],['เงินทอน',b.change||0]]:[];}
 function payRowsHTML(b){
   const parts=payParts(b);
-  if(!parts.length)return `<div class="rc-line" style="color:var(--muted)"><span>ชำระโดย</span><span>${esc(payName(b))}</span></div>`;
+  if(!parts.length)return `<div class="rc-line" style="color:var(--muted)"><span>ชำระโดย</span><span>${esc(payName(b))}</span></div>`
+    +cashRows(b).map(([l,v],i)=>`<div class="rc-line" style="padding-left:14px;${i?'font-weight:700':'color:var(--muted)'}"><span>${l}</span><span>${fmt(v)}</span></div>`).join('');
   return `<div class="rc-line" style="color:var(--muted)"><span>ชำระโดย</span><span>แบ่งจ่าย</span></div>`
     +parts.map(([l,v])=>`<div class="rc-line" style="color:var(--muted);padding-left:14px"><span>${esc(l)}</span><span>${fmt(v)}</span></div>`).join('');
 }
@@ -728,7 +743,7 @@ function receiptPNG(){slipPNG(slipFromBill(receipt));}
 
 /* ---------- SLIP QR (ลูกค้าสแกนเปิดใบเสร็จแล้วโหลดเองได้) ---------- */
 // ย่อข้อมูลบิลให้สั้นที่สุด แล้วฝังลงลิงก์ (ไม่เก็บขึ้นเซิร์ฟเวอร์)
-function slipFromBill(b){const parts=payParts(b);const s={s:db.settings.shopName,n:b.no,t:b.tableLabel,d:b.closedAt,o:b.openedByName||'',p:parts.length?'แบ่งจ่าย':payName(b),tot:b.total,l:(b.lines||[]).map(x=>[lineName(x),x.qty,x.amount])};if(parts.length)s.pp=parts;return s;}
+function slipFromBill(b){const parts=payParts(b);const s={s:db.settings.shopName,n:b.no,t:b.tableLabel,d:b.closedAt,o:b.openedByName||'',p:parts.length?'แบ่งจ่าย':payName(b),tot:b.total,l:(b.lines||[]).map(x=>[lineName(x),x.qty,x.amount])};const sub=parts.length?parts:cashRows(b);if(sub.length)s.pp=sub;return s;}
 function slipUrl(b){const json=JSON.stringify(slipFromBill(b));const data=btoa(unescape(encodeURIComponent(json)));return location.origin+location.pathname+'#slip='+data;}
 function slipFromHash(){try{const h=location.hash||'';if(h.indexOf('#slip=')!==0)return null;return JSON.parse(decodeURIComponent(escape(atob(h.slice(6)))));}catch(e){return null;}}
 function renderSlipView(s){
@@ -1099,8 +1114,6 @@ function viewSettings(){
       ${testMode?`<button class="btn btn-ghost btn-sm" data-act="test-exit">ออกจากโหมดทดสอบ</button>`
         :`<button class="btn btn-ghost btn-sm" data-act="test-open">เข้าโหมดทดสอบ</button>`}</div></div>`;
 }
-// re-render ทั้งหน้าแล้วคืนตำแหน่งเลื่อนของหน้าหลัก ไม่ให้เด้งกลับบนสุด
-function keepMainScroll(fn){const s=document.querySelector('#app > .content');const y=s?s.scrollTop:0;fn();const s2=document.querySelector('#app > .content');if(s2)s2.scrollTop=y;}
 // ของแจกสมาชิก: ที่นี่ลบออกได้อย่างเดียว การเพิ่มทำจากปุ่ม "+ ของแจก" ในรายการเมนูสั่งเพิ่ม
 function freeListCard(){
   const list=memberFreeList();
@@ -1180,6 +1193,15 @@ function viewModal(){
       +`<button class="btn btn-primary" data-act="qrpay-confirm" data-m="${m.method}">${I.check} รับเงินแล้ว</button>`);
   }
   if(m.type==='clear')return sheet(sheetHead(esc(m.title))+`<div class="muted" style="font-size:14px;margin-bottom:18px">คิดเงินเรียบร้อยแล้ว เก็บโต๊ะให้ว่างไหม?</div><button class="btn btn-primary" data-act="clear-go">เคลียร์โต๊ะ · ทำให้ว่าง</button>`);
+  if(m.type==='cashpay'){
+    return sheet(sheetHead('รับเงินสด')
+      +`<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px"><span class="muted" style="font-size:14px">ยอดบิล</span><span style="font-size:24px;font-weight:700">${fmt(m.total)}</span></div>`
+      +`<div class="muted" style="font-size:12.5px;margin-bottom:6px">รับเงินมา (฿)</div>`
+      +`<input class="input" data-mfield="cashin" inputmode="decimal" placeholder="ใส่จำนวนเงินที่ลูกค้าให้มา" value="${esc(m.values.cashin??'')}" style="font-size:20px;font-weight:600;margin-bottom:10px">`
+      +`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${cashQuick(m.total).map(v=>`<button class="chip" data-act="cash-quick" data-v="${v}">${v===m.total?'พอดี':fmt(v)}</button>`).join('')}</div>`
+      +`<div id="cashchg" style="display:flex;justify-content:space-between;align-items:baseline;padding:12px 14px;border-radius:12px;background:var(--line2);margin-bottom:14px;min-height:52px"></div>`
+      +`<button class="btn btn-primary" id="cashgo" data-act="cash-confirm">${I.check} รับเงินแล้ว</button>`);
+  }
   if(m.type==='testenter'){
     return sheet(sheetHead('เข้าโหมดทดสอบ')
       +`<div class="muted" style="font-size:13px;margin-bottom:12px">ทุกอย่างจะเหมือนปกติ แต่สิ่งที่ทำในโหมดนี้จะไม่ถูกบันทึก และจะหายทั้งหมดเมื่อออก · มีผลเฉพาะเครื่องนี้</div>`
@@ -1276,6 +1298,18 @@ function afterRender(){
   if(mapOpen)attachMapEvents();
   if(modal&&modal.type==='slipqr')drawSlipQR();
   if(modal&&modal.type==='splitpay')splitUpdate();
+  if(modal&&modal.type==='cashpay')cashUpdate();
+}
+// ปุ่มลัดรับเงินสด: พอดี + ปัดขึ้นเป็นหลักร้อย/ห้าร้อย/พัน
+function cashQuick(t){const s=new Set([t]);[100,500,1000].forEach(u=>{const v=Math.ceil(t/u)*u;if(v>t)s.add(v);});return [...s].sort((a,b)=>a-b);}
+function cashParts(){const raw=String(modal.values.cashin||'').trim();const got=Math.round((parseFloat(raw)||0)*100)/100;const change=Math.round((got-modal.total)*100)/100;return {raw,got,change,ok:raw!==''&&got>0&&change>=0};}
+function cashUpdate(){
+  if(!modal||modal.type!=='cashpay')return;
+  const c=cashParts(),box=document.getElementById('cashchg'),go=document.getElementById('cashgo');
+  if(box)box.innerHTML=c.raw===''?`<span class="muted" style="font-size:13.5px">ใส่จำนวนที่รับมา หรือกดปุ่มลัดด้านบน</span>`
+    :c.change<0?`<span style="font-size:14px;color:var(--red)">ยังขาดอีก</span><span style="font-size:22px;font-weight:700;color:var(--red)">${fmt(-c.change)}</span>`
+    :`<span style="font-size:14px;color:var(--green)">เงินทอน</span><span style="font-size:28px;font-weight:700;color:var(--green)">${fmt(c.change)}</span>`;
+  if(go)go.disabled=!c.ok;
 }
 // เช็คว่า คนละครึ่ง + โอน = ยอดบิลพอดี ถึงจะกดรับเงินได้
 function splitParts(){const v={};let sum=0,neg=false;SPLIT_KEYS.forEach(k=>{const n=Math.round((parseFloat(modal.values[k])||0)*100)/100;if(n<0)neg=true;v[k]=n;sum+=n;});const diff=Math.round((modal.total-sum)*100)/100;return {v,diff,ok:!neg&&diff===0&&modal.total>0};}
@@ -1359,13 +1393,14 @@ app.addEventListener('click',e=>{
       const bag=kind==='pkg'?bl.pkg:kind==='svc'?(bl.svc||(bl.svc={})):kind==='free'?(bl.free||(bl.free={})):bl.itm;
       bag[bid]=Math.max(0,(bag[bid]||0)+parseInt(b.getAttribute('data-d')));if(bl.saved)billEdited=true;
       if(kind==='pkg'&&memberHeads(bl)===0)bl.free={};   // ไม่เหลือหัวสมาชิกแล้ว → ของแจกที่กดไว้ถูกล้าง
-      const sc=document.querySelector('.overlay .content');const y=sc?sc.scrollTop:0;
-      save();render();
-      const sc2=document.querySelector('.overlay .content');if(sc2)sc2.scrollTop=y;
-      break;}
+      save();render();break;}
     case 'pay-start': payStep=true; render(); break;
     case 'pay-cancel': payStep=false; render(); break;
-    case 'pay': checkout(b.getAttribute('data-m')); break;
+    case 'pay-cash':{modal={type:'cashpay',total:totals(curBill()).total,values:{cashin:''}};render();break;}
+    case 'cash-quick':{if(!modal||modal.type!=='cashpay')break;modal.values.cashin=b.getAttribute('data-v');
+      const ci=document.querySelector('[data-mfield="cashin"]');if(ci)ci.value=modal.values.cashin;cashUpdate();break;}
+    case 'cash-confirm':{if(!modal||modal.type!=='cashpay')break;const c=cashParts();if(!c.ok)break;
+      modal=null;checkout('cash',null,'',{cashIn:c.got,change:c.change});break;}
     case 'pay-qr':{const meth=b.getAttribute('data-m'); const name=meth==='transfer'?'โอน — สแกน QR':(db.settings.customName||'ช่องพิเศษ'); const img=meth==='transfer'?db.settings.transferQR:db.settings.customImg; modal={type:'qrpay',method:meth,name,img}; render(); break;}
     case 'qrpay-confirm':{const meth=b.getAttribute('data-m');
       if(meth==='transfer'&&db.banks.length){modal={type:'bankpick',method:'transfer',amount:totals(curBill()).total};render();}
@@ -1412,10 +1447,10 @@ app.addEventListener('click',e=>{
     case 'edit-new': openListEditor(list,null); break;
     case 'edit-item': openListEditor(list,db[list].find(x=>x.id===id)); break;
     case 'edit-del': db[list]=db[list].filter(x=>x.id!==id); save(); render(); break;
-    case 'free-toggle':{const fm=db.menu.find(x=>x.id===id);if(fm){if(fm.memberFree)delete fm.memberFree;else fm.memberFree=true;keepMainScroll(()=>{save();render();});}break;}
+    case 'free-toggle':{const fm=db.menu.find(x=>x.id===id);if(fm){if(fm.memberFree)delete fm.memberFree;else fm.memberFree=true;save();render();}break;}
     case 'free-remove':{const fk=b.getAttribute('data-key');const fm=db.menu.find(x=>x.id===fk);
       if(fm)delete fm.memberFree;else db.memberItems=db.memberItems.filter(x=>x.id!==fk);
-      keepMainScroll(()=>{save();render();});break;}
+      save();render();break;}
     case 'modal-close': modal=null; render(); break;
     case 'modal-save': saveListItem(); break;
     case 'clear-go': setStatus(modal.id,'available'); modal=null; save(); render(); break;
@@ -1451,6 +1486,7 @@ app.addEventListener('input',e=>{
   else if(f==='etlabel'){const t=db.tables.find(x=>x.id===editSel);if(t){t.label=e.target.value;save();}}
   const mf=e.target.getAttribute('data-mfield'); if(mf&&modal)modal.values[mf]=e.target.value;
   if(mf&&modal&&modal.type==='splitpay')splitUpdate();
+  if(mf&&modal&&modal.type==='cashpay')cashUpdate();
 });
 app.addEventListener('change',e=>{const mf=e.target.getAttribute('data-mfield'); if(mf&&modal)modal.values[mf]=e.target.value;
   const ik=e.target.getAttribute('data-img'); if(ik&&e.target.files&&e.target.files[0]){fileToThumb(e.target.files[0],url=>{db.settings[ik]=url;save();render();});}});
@@ -1485,7 +1521,8 @@ function doExit(){const b=curBill();
   if(!b.saved){db.bills=db.bills.filter(x=>x.id!==b.id);b.tableIds.forEach(id=>setStatus(id,'available'));}
   else {if(billBackup){b.pkg=JSON.parse(JSON.stringify(billBackup.pkg));b.itm=JSON.parse(JSON.stringify(billBackup.itm));b.svc=JSON.parse(JSON.stringify(billBackup.svc||{}));b.free=JSON.parse(JSON.stringify(billBackup.free||{}));} b.tableIds.forEach(id=>setStatus(id,'occupied'));}
   billId=null;payStep=false;billEdited=false;billBackup=null;modal=null;save();render();}
-function checkout(method,pays,bank){const b=curBill();const {total,heads}=totals(b);
+function checkout(method,pays,bank,cash){const b=curBill();const {total,heads}=totals(b);
+  if(cash){b.cashIn=cash.cashIn;b.change=cash.change;}else{delete b.cashIn;delete b.change;}
   const lines=[];db.packages.forEach(p=>{const q=b.pkg[p.id]||0;if(q)lines.push({name:p.name,qty:q,amount:q*p.price,kind:'pkg'});});
   // ของแจกสมาชิก: ราคา 0 แต่เป็น kind 'itm' ชื่อเดียวกับเมนู จำนวนจึงไปรวมกับเมนูสั่งเพิ่มในรายงาน
   if(memberHeads(b)>0)memberFreeList().forEach(f=>{const q=(b.free||{})[f.key]||0;if(q)lines.push({name:f.name,qty:q,amount:0,kind:'itm',free:true});});
@@ -1550,6 +1587,29 @@ function clockIn(p){if(!db.shifts.some(s=>s.staffId===p.id&&!s.outAt))db.shifts.
 function clockOut(){if(!session)return;const s=db.shifts.find(x=>x.staffId===session.id&&!x.outAt);if(s)s.outAt=new Date().toISOString();save();}
 
 applyLayout();
+// แป้นพิมพ์มือถือ: วัดพื้นที่ที่ยังมองเห็นจาก visualViewport แล้วยกแผ่นล่างขึ้นพ้นแป้นพิมพ์
+// (Android ใช้ interactive-widget ใน meta viewport อยู่แล้ว ค่านี้จึงเป็น 0; iPhone ต้องพึ่งตัวนี้)
+function isTyping(){const el=document.activeElement;return !!el&&/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)&&el.type!=='file';}
+function syncViewport(){
+  const vv=window.visualViewport, st=document.documentElement.style;
+  // ตั้งค่าเฉพาะตอนกำลังพิมพ์ นอกนั้นลบทิ้งให้ CSS ใช้ค่าปกติ (กันค่าค้างจากการวัดครั้งก่อน)
+  if(!vv||!isTyping()){['--kb','--vvh','--vvt'].forEach(k=>st.removeProperty(k));return;}
+  st.setProperty('--kb',Math.max(0,Math.round(window.innerHeight-vv.height-vv.offsetTop))+'px');
+  st.setProperty('--vvh',Math.round(vv.height)+'px');
+  st.setProperty('--vvt',Math.round(vv.offsetTop)+'px');
+}
+if(window.visualViewport){visualViewport.addEventListener('resize',syncViewport);visualViewport.addEventListener('scroll',syncViewport);}
+document.addEventListener('focusin',e=>{
+  setTimeout(()=>{
+    syncViewport();
+    const el=e.target; if(!el||document.activeElement!==el||!isTyping())return;
+    const vv=window.visualViewport, top=vv?vv.offsetTop:0, bottom=vv?vv.offsetTop+vv.height:window.innerHeight, r=el.getBoundingClientRect();
+    if(r.bottom>bottom-8||r.top<top+8)el.scrollIntoView({block:'center'});
+  },350);   // รอแป้นพิมพ์เลื่อนขึ้นเสร็จก่อนวัด
+});
+document.addEventListener('focusout',()=>setTimeout(syncViewport,120));
+window.addEventListener('resize',syncViewport);
+syncViewport();
 // ถ้าเปิดลิงก์ที่มี #slip= (ลูกค้าสแกน QR) ให้แสดงหน้าใบเสร็จอย่างเดียว ไม่ต้องล็อกอิน/ไม่ต่อ Firebase
 const _slip=slipFromHash();
 if(_slip){
