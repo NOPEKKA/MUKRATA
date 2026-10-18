@@ -649,15 +649,19 @@ function soldCountByKind(kind){const m={};db.bills.forEach(b=>{if(b.status!=='pa
 function byBestSelling(list,kind){const s=soldCountByKind(kind);return [...list].sort((a,b)=>(s[b.name]||0)-(s[a.name]||0));}
 function viewBilling(){
   const b=curBill(); if(!b)return''; const {total,heads}=totals(b); const grouped=b.tableIds.length>1;
+  const editing=b.status==='paid';   // กำลังแก้บิลที่จ่ายแล้ว
   return `<div class="overlay">
     <header class="top"><div class="brand"><button class="ghost-ico" data-act="bill-exit" style="padding:8px">${I.back}</button>
-      <div><div class="shop">โต๊ะ ${esc(b.tableLabel)}${b.saved&&billEdited?' <span style="color:var(--red);font-size:12px;font-weight:700">*แก้ไข</span>':''}</div><div class="subhead">${heads} หัว · รับโดย ${esc(b.openedByName||'-')}</div></div></div></header>
+      <div><div class="shop">${editing?`แก้ไขบิล #${String(b.no||0).padStart(4,'0')} · `:''}โต๊ะ ${esc(b.tableLabel)}${b.saved&&billEdited?' <span style="color:var(--red);font-size:12px;font-weight:700">*แก้ไข</span>':''}</div><div class="subhead">${heads} หัว · รับโดย ${esc(b.openedByName||'-')}</div></div></div></header>
     <div class="content pad">
-      <div style="display:flex;gap:8px;margin-bottom:16px">
+      ${editing?`<div class="card" style="margin-bottom:16px;padding:12px 16px;border-color:var(--amber);background:var(--amberBg);font-size:13px">
+        กำลังแก้บิลที่จ่ายแล้ว · เดิม ${fmt(b.total)} (${esc(payText(b))})${(()=>{const ei=editInfo(b);return ei?` · แก้ไปแล้ว ${ei.n} ครั้ง`:'';})()}<br>
+        <span class="muted">กดย้อนกลับ = ยกเลิกการแก้ บิลกลับเป็นแบบเดิม</span></div>`
+      :`<div style="display:flex;gap:8px;margin-bottom:16px">
         <button class="iconbtn btn-sm" style="flex:1;justify-content:center" data-act="op-move">${I.swap} ย้าย</button>
         <button class="iconbtn btn-sm" style="flex:1;justify-content:center" data-act="op-merge">${I.merge} รวมโต๊ะ</button>
         ${grouped?`<button class="iconbtn btn-sm" style="flex:1;justify-content:center" data-act="op-split">แยกโต๊ะ</button>`:''}
-      </div>
+      </div>`}
       <div class="sec">บุฟเฟต์ · จำนวนหัว</div>
       <div class="card" style="padding:2px 18px;margin-bottom:18px">${db.packages.map(p=>lineRow(p.name,fmt(p.price)+' / หัว',b.pkg[p.id]||0,'pkg',p.id)).join('')}</div>
       ${(memberHeads(b)>0&&memberFreeList().length)?`<div class="sec">ของสมาชิก · ฟรี</div>
@@ -670,7 +674,10 @@ function viewBilling(){
     <div class="foot">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px">
         <span class="muted" style="font-size:14px">รวมทั้งหมด</span><span style="font-size:28px;font-weight:700">${fmt(total)}</span></div>
-      ${!payStep?`<div style="display:flex;gap:10px">
+      ${!payStep&&editing?`<div style="display:flex;gap:10px">
+          <button class="btn btn-ghost" style="flex:1" data-act="edit-cancel">ยกเลิกการแก้ไข</button>
+          <button class="btn btn-primary" style="flex:1.5" data-act="pay-start" ${total===0?'disabled':''}>${I.receipt} คิดเงินใหม่</button></div>`
+      :!payStep?`<div style="display:flex;gap:10px">
           <button class="btn ${b.saved?'btn-ghost':'btn-primary'}" style="flex:1" data-act="bill-close">${b.saved?'บันทึกไว้':'บันทึกออเดอร์'}</button>
           ${b.saved?`<button class="btn btn-primary" style="flex:1.5" data-act="pay-start" ${total===0?'disabled':''}>${I.receipt} คิดเงิน</button>`:''}</div>
         ${!b.saved?`<div class="muted" style="font-size:12.5px;text-align:center;margin-top:10px">บันทึกออเดอร์ก่อน แล้วเปิดโต๊ะอีกครั้งเพื่อคิดเงิน</div>`:''}`
@@ -732,6 +739,7 @@ function viewReceipt(){
       <div class="rc-div"></div>
       <div class="rc-total"><span class="muted" style="font-size:14px">รวมทั้งหมด</span><span class="v">${fmt(b.total)}</span></div>
       ${payRowsHTML(b)}
+      ${editLineHTML(b)}
       <div class="rc-thanks">ขอบคุณที่ใช้บริการ</div></div></div>
     <div class="foot">
       <button class="btn btn-ghost" style="margin-bottom:10px" data-act="slip-qr" data-id="${b.id}">${I.qr} QR ให้ลูกค้าโหลดใบเสร็จ</button>
@@ -1004,16 +1012,17 @@ function viewBillDetail(){
         <div class="rc-div"></div>
         <div class="rc-total"><span class="muted" style="font-size:14px">รวมทั้งหมด</span><span class="v">${fmt(b.total)}</span></div>
         ${payRowsHTML(b)}
+        ${editLineHTML(b)}
       </div>
       <div class="pad" style="padding-top:0">
         <div class="sec">ประวัติการแก้ไข</div>
         ${(()=>{const h=(b.history||[]).filter(x=>x.action!=='บันทึกออเดอร์'&&x.action!=='คิดเงิน');
           return h.length?h.slice().reverse().map(x=>`<div class="listrow"><div>
           <div style="font-size:14px;font-weight:500">${esc(x.action)}${x.detail?' · '+esc(x.detail):''}</div>
-          <div class="muted" style="font-size:12px;margin-top:2px">${fmtDT(x.at)} · ${esc(x.staffName)}</div></div></div>`).join(''):`<div class="muted" style="font-size:13.5px">ยังไม่มีการแก้ไข</div>`;})()}
+          <div class="muted" style="font-size:12px;margin-top:2px">${whenRel(x.at,b.closedAt||b.openedAt)} · ${esc(x.staffName)}</div></div></div>`).join(''):`<div class="muted" style="font-size:13.5px">ยังไม่มีการแก้ไข</div>`;})()}
       </div>
     </div>
-    ${b.status==='paid'?`<div class="foot">
+    ${b.status==='paid'||(b.status==='open'&&b.no)?`<div class="foot">
       <button class="btn btn-ghost" style="margin-bottom:10px" data-act="slip-qr" data-id="${b.id}">${I.qr} QR ให้ลูกค้าโหลดใบเสร็จ</button>
       <button class="btn btn-ghost" style="margin-bottom:10px" data-act="bill-reopen" data-id="${b.id}">${I.edit} แก้ไขบิล</button>
       <button class="btn-danger" data-act="bill-void" data-id="${b.id}">${I.trash} ยกเลิกบิล</button></div>`:''}
@@ -1046,16 +1055,24 @@ function viewCash(){
       <div class="muted" style="font-size:12px;margin-top:2px">${hhmm(c.at)} · ${esc(c.note||'-')} · ${esc(c.staffName)}</div></div></div>`).join('')}
   </div>`;
 }
+// บรรทัด "แก้ไขแล้ว N ครั้ง · ล่าสุด เวลา" ใต้บิล (มีวันที่เมื่อแก้คนละวันกับบิล)
+function editLineHTML(b){const ei=editInfo(b);return ei?`<div class="rc-line" style="color:var(--amber);font-size:12.5px"><span>แก้ไขแล้ว ${ei.n} ครั้ง</span><span>ล่าสุด ${whenRel(ei.last,b.closedAt||b.openedAt)}</span></div>`:'';}
+let logDay=null;   // null = วันนี้
+function shiftDay(ds,n){const d=new Date(ds+'T12:00:00');d.setDate(d.getDate()+n);return dstr(d);}
 function viewLog(){
-  const t=today();
+  const t=logDay||today(), isToday=t===today();
   const bills=db.bills.filter(b=>b.no&&dateOf(b.closedAt||b.openedAt)===t).sort((a,b)=>(b.no||0)-(a.no||0));
   return `<div class="pad">
-    <div class="sec">บิลวันนี้</div>
-    ${bills.length===0?`<div class="muted" style="font-size:13.5px;margin-bottom:18px">ยังไม่มีบิล</div>`:bills.map(b=>`<button class="card" data-act="bill-view" data-id="${b.id}" style="width:100%;text-align:left;margin-bottom:10px;padding:14px 16px;border:1px solid var(--line);background:var(--surface)">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px">
+      <button class="iconbtn" data-act="logday" data-d="-1">‹ วันก่อน</button>
+      <div class="sec" style="margin:0">${isToday?'บิลวันนี้':'บิล '+dayLabel(t)}</div>
+      <button class="iconbtn" data-act="logday" data-d="1" ${isToday?'disabled style="opacity:.35"':''}>วันถัดไป ›</button></div>
+    ${bills.length===0?`<div class="muted" style="font-size:13.5px;margin-bottom:18px">ยังไม่มีบิล</div>`:bills.map(b=>{const ei=editInfo(b);return `<button class="card" data-act="bill-view" data-id="${b.id}" style="width:100%;text-align:left;margin-bottom:10px;padding:14px 16px;border:1px solid var(--line);background:var(--surface)">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <div><div style="font-size:14.5px;font-weight:600">#${String(b.no).padStart(4,'0')} · โต๊ะ ${esc(b.tableLabel)} ${b.status==='void'?'<span style="color:var(--red)">(ยกเลิก)</span>':''}</div>
-        <div class="muted" style="font-size:12px;margin-top:2px">${hhmm(b.closedAt||b.openedAt)} · ${esc(payName(b))} · ${esc(b.openedByName||'')}</div></div>
-        <div style="text-align:right"><div style="font-weight:700">${fmt(b.total)}</div><div class="muted" style="font-size:12px;margin-top:2px">ดูบิล ›</div></div></div></button>`).join('')}
+        <div><div style="font-size:14.5px;font-weight:600">#${String(b.no).padStart(4,'0')} · โต๊ะ ${esc(b.tableLabel)} ${b.status==='void'?'<span style="color:var(--red)">(ยกเลิก)</span>':b.status==='open'?'<span style="color:var(--amber)">(แก้ค้าง)</span>':''}</div>
+        <div class="muted" style="font-size:12px;margin-top:2px">${hhmm(b.closedAt||b.openedAt)} · ${esc(payName(b))} · ${esc(b.openedByName||'')}</div>
+        ${ei?`<div style="font-size:12px;margin-top:2px;color:var(--amber)">แก้ไข ${ei.n} ครั้ง · ล่าสุด ${whenRel(ei.last,b.closedAt||b.openedAt)}</div>`:''}</div>
+        <div style="text-align:right"><div style="font-weight:700">${fmt(b.total)}</div><div class="muted" style="font-size:12px;margin-top:2px">ดูบิล ›</div></div></div></button>`;}).join('')}
   </div>`;
 }
 function viewWork(){
@@ -1193,6 +1210,13 @@ function viewModal(){
       +`<button class="btn btn-primary" data-act="qrpay-confirm" data-m="${m.method}">${I.check} รับเงินแล้ว</button>`);
   }
   if(m.type==='clear')return sheet(sheetHead(esc(m.title))+`<div class="muted" style="font-size:14px;margin-bottom:18px">คิดเงินเรียบร้อยแล้ว เก็บโต๊ะให้ว่างไหม?</div><button class="btn btn-primary" data-act="clear-go">เคลียร์โต๊ะ · ทำให้ว่าง</button>`);
+  if(m.type==='layoutconfirm'){
+    const toPhone=m.l==='phone';
+    return sheet(sheetHead(toPhone?'เปลี่ยนเป็นโหมดโทรศัพท์?':'เปลี่ยนเป็นโหมดคอม?')
+      +`<div class="muted" style="font-size:14px;margin-bottom:18px">${toPhone?'หน้าจอจะเป็นแนวตั้งแบบมือถือ เมนูอยู่ด้านล่าง':'หน้าจอจะเป็นแบบคอม มีเมนูด้านข้างและการ์ดหลายคอลัมน์'} · เปลี่ยนกลับได้ทุกเมื่อ</div>`
+      +`<button class="btn btn-primary" style="margin-bottom:10px" data-act="layout-go">${toPhone?I.phone+' เปลี่ยนเป็นโหมดโทรศัพท์':I.monitor+' เปลี่ยนเป็นโหมดคอม'}</button>`
+      +`<button class="btn btn-ghost" data-act="modal-close">ยกเลิก</button>`);
+  }
   if(m.type==='cashpay'){
     return sheet(sheetHead('รับเงินสด')
       +`<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px"><span class="muted" style="font-size:14px">ยอดบิล</span><span style="font-size:24px;font-weight:700">${fmt(m.total)}</span></div>`
@@ -1377,9 +1401,12 @@ app.addEventListener('click',e=>{
     case 'map-del':{db.mapItems=db.mapItems.filter(x=>x.id!==mapSel);mapSel=null;save();render();break;}
     case 'map-rot':{const it=db.mapItems.find(x=>x.id===b.getAttribute('data-id'));if(it){it.rot=((it.rot||0)+15)%360;save();render();}break;}
     case 'map-clear':db.mapItems=[];mapSel=null;save();render();break;
-    case 'layout': layout=b.getAttribute('data-l'); localStorage.setItem('mookratha_layout',layout); applyLayout(); render(); break;
+    case 'layout':{const l=b.getAttribute('data-l');if(l!==layout){modal={type:'layoutconfirm',l};render();}break;}
+    case 'layout-go':{if(!modal||modal.type!=='layoutconfirm')break;layout=modal.l;modal=null;localStorage.setItem('mookratha_layout',layout);applyLayout();render();break;}
     case 'table-search':{const el=document.getElementById('tsearch'); if(el)warpToTable(el.value); break;}
-    case 'overlay': overlay=b.getAttribute('data-ov'); render(); break;
+    case 'overlay': overlay=b.getAttribute('data-ov'); logDay=null; render(); break;
+    case 'logday':{const nd=shiftDay(logDay||today(),parseInt(b.getAttribute('data-d')));logDay=nd>=today()?null:nd;render();break;}
+    case 'edit-cancel': cancelEdit(); break;
     case 'overlay-close': overlay=null; render(); break;
 
     case 'bill-close': closeBill(); break;
@@ -1429,7 +1456,7 @@ app.addEventListener('click',e=>{
     case 'do-merge': doMerge(id); break;
     case 'do-split': doSplit(id); break;
 
-    case 'receipt-done': receipt=null; render(); break;
+    case 'receipt-done': receipt=null; backFromEdit(); render(); break;
     case 'receipt-png': receiptPNG(); break;
     case 'slip-qr':{const sb=db.bills.find(x=>x.id===id)||receipt; if(sb){modal={type:'slipqr',url:slipUrl(sb)};render();} break;}
     case 'slip-save': slipPNG(slipFromHash()||{}); break;
@@ -1518,10 +1545,12 @@ function exitBill(){const b=curBill();const {total}=totals(b);
   if((!b.saved&&total>0)||(b.saved&&billEdited)){modal={type:'exitconfirm'};render();return;}
   doExit();}
 function doExit(){const b=curBill();
+  if(b.status==='paid'){cancelEdit();return;}   // ออกจากหน้าแก้บิลที่จ่ายแล้ว = ยกเลิกการแก้ บิลกลับเป็นแบบเดิม
   if(!b.saved){db.bills=db.bills.filter(x=>x.id!==b.id);b.tableIds.forEach(id=>setStatus(id,'available'));}
   else {if(billBackup){b.pkg=JSON.parse(JSON.stringify(billBackup.pkg));b.itm=JSON.parse(JSON.stringify(billBackup.itm));b.svc=JSON.parse(JSON.stringify(billBackup.svc||{}));b.free=JSON.parse(JSON.stringify(billBackup.free||{}));} b.tableIds.forEach(id=>setStatus(id,'occupied'));}
   billId=null;payStep=false;billEdited=false;billBackup=null;modal=null;save();render();}
 function checkout(method,pays,bank,cash){const b=curBill();const {total,heads}=totals(b);
+  const wasPaid=b.status==='paid', oldTotal=b.total, now=new Date().toISOString();   // wasPaid = กำลังแก้บิลที่จ่ายไปแล้ว
   if(cash){b.cashIn=cash.cashIn;b.change=cash.change;}else{delete b.cashIn;delete b.change;}
   const lines=[];db.packages.forEach(p=>{const q=b.pkg[p.id]||0;if(q)lines.push({name:p.name,qty:q,amount:q*p.price,kind:'pkg'});});
   // ของแจกสมาชิก: ราคา 0 แต่เป็น kind 'itm' ชื่อเดียวกับเมนู จำนวนจึงไปรวมกับเมนูสั่งเพิ่มในรายงาน
@@ -1529,11 +1558,18 @@ function checkout(method,pays,bank,cash){const b=curBill();const {total,heads}=t
   db.menu.forEach(m=>{const q=b.itm[m.id]||0;if(q)lines.push({name:m.name,qty:q,amount:q*m.price,kind:'itm'});});
   (db.services||[]).forEach(v=>{const q=(b.svc||{})[v.id]||0;if(q)lines.push({name:v.name,qty:q,amount:q*v.price,kind:'svc'});});
   if(!b.no)b.no=++db.counters.bill;
-  b.status='paid';b.closedAt=new Date().toISOString();b.paymentMethod=method;b.total=total;b.heads=heads;b.lines=lines;b.tableLabel=labelFor(b);
+  // แก้บิล: คงเวลาปิดบิลเดิมไว้ ยอดจึงยังอยู่วันเดิมในรายงาน
+  b.status='paid';if(!wasPaid)b.closedAt=now;b.paymentMethod=method;b.total=total;b.heads=heads;b.lines=lines;b.tableLabel=labelFor(b);
   if(method==='split')b.pays={cash:pays.cash||0,transfer:pays.transfer||0,kk:pays.kk||0,custom:pays.custom||0};else delete b.pays;
   if(bank)b.bank=bank;else delete b.bank;
-  billLog(b,'คิดเงิน',`${fmt(total)} · ${payText(b)}`);
-  b.tableIds.forEach(id=>setStatus(id,'billing')); receipt=b; billId=null; payStep=false; save(); render();}
+  if(wasPaid){
+    b.edits=(b.edits||0)+1; b.lastEditAt=now; delete b.editBak;
+    billLog(b,'แก้ไขบิล',`${fmt(oldTotal)} → ${fmt(total)} · ${payText(b)}`);
+  }else{
+    billLog(b,'คิดเงิน',`${fmt(total)} · ${payText(b)}`);
+    b.tableIds.forEach(id=>setStatus(id,'billing'));   // แก้บิลไม่แตะสถานะโต๊ะ โต๊ะอาจมีลูกค้าใหม่แล้ว
+  }
+  receipt=b; billId=null; payStep=false; billEdited=false; save(); render();}
 function setStatus(tid,st){const t=db.tables.find(x=>x.id===tid);if(t)t.status=st;}
 
 function doMove(target){const b=curBill();const old=b.tableIds.slice();old.forEach(id=>setStatus(id,'available'));b.tableIds=[target];b.tableLabel=labelFor(b);setStatus(target,'occupied');billLog(b,'ย้ายโต๊ะ',`${old.map(i=>(db.tables.find(t=>t.id===i)||{}).label).join('+')} → ${b.tableLabel}`);modal=null;save();render();}
@@ -1580,7 +1616,43 @@ function doReset(scope){
   logAct('รีเซ็ตข้อมูล','ขอบเขต: '+resetScopeLabel(scope));
   modal=null; billId=null; billView=null; overlay=null; view='floor'; save(); render();
 }
-function reopenBill(id){const b=db.bills.find(x=>x.id===id);b.status='open';b.saved=true;b.tableIds.forEach(tid=>{if((db.tables.find(t=>t.id===tid)||{}))setStatus(tid,'occupied');});billLog(b,'เปิดแก้ไขบิล','');modal=null;overlay=null;billView=null;billId=b.id;payStep=false;save();render();}
+// แก้บิลที่จ่ายแล้ว: บิลยังเป็น "จ่ายแล้ว" ตลอดการแก้ (ยอดในรายงานไม่เปลี่ยนจนกว่าจะคิดเงินใหม่)
+// เก็บสำเนารายการก่อนแก้ไว้บนบิล ถ้าแก้ค้างจากรอบก่อน (ปิดแอปกลางคัน) จะคืนค่าจากสำเนานั้นก่อนเริ่ม
+const billSnap=b=>({pkg:JSON.parse(JSON.stringify(b.pkg||{})),itm:JSON.parse(JSON.stringify(b.itm||{})),svc:JSON.parse(JSON.stringify(b.svc||{})),free:JSON.parse(JSON.stringify(b.free||{}))});
+let editReturn=null;
+function reopenBill(id){const b=db.bills.find(x=>x.id===id);if(!b)return;
+  if(b.status==='open'){   // บิลที่ค้างสถานะเปิดจากระบบรุ่นก่อน: จำนวนอาจถูกแก้ค้างไว้ → เริ่มจากรายการที่จ่ายจริง
+    const c=countsFromLines(b); if(c)Object.assign(b,c);
+    b.status='paid'; releaseTables(b);
+  }
+  if(b.editBak)Object.assign(b,billSnap(b.editBak)); else b.editBak=billSnap(b);
+  b.saved=true;
+  editReturn={overlay,billView:b.id};
+  modal=null;overlay=null;billView=null;billId=b.id;payStep=false;billEdited=false;billBackup=null;save();render();}
+// แปลงรายการในใบเสร็จกลับเป็นจำนวนต่อแพ็กเกจ/เมนู/บริการ/ของแจก (คืน null ถ้ามีรายการที่หาไม่เจอ เช่นเมนูถูกลบ/เปลี่ยนชื่อ)
+function countsFromLines(b){const c={pkg:{},itm:{},svc:{},free:{}};let ok=!!(b.lines&&b.lines.length);
+  (b.lines||[]).forEach(l=>{
+    const [bag,key]=l.kind==='pkg'?['pkg',(db.packages.find(x=>x.name===l.name)||{}).id]
+      :l.kind==='svc'?['svc',((db.services||[]).find(x=>x.name===l.name)||{}).id]
+      :l.free?['free',(memberFreeList().find(x=>x.name===l.name)||{}).key]
+      :['itm',(db.menu.find(x=>x.name===l.name)||{}).id];
+    if(!key){ok=false;return;} c[bag][key]=(c[bag][key]||0)+l.qty;
+  });
+  return ok?c:null;}
+function cancelEdit(){const b=curBill();
+  if(b&&b.editBak){Object.assign(b,billSnap(b.editBak));delete b.editBak;}
+  billId=null;payStep=false;billEdited=false;billBackup=null;modal=null;backFromEdit();save();render();}
+function backFromEdit(){if(editReturn){overlay=editReturn.overlay;billView=editReturn.billView;editReturn=null;}}
+// โต๊ะที่ถูกตั้งเป็น "มีลูกค้า" โดยไม่มีบิลเปิดอยู่จริง (ค้างจากการแก้บิลรุ่นก่อน) → คืนเป็นว่าง
+function releaseTables(b){b.tableIds.forEach(tid=>{const t=db.tables.find(x=>x.id===tid);if(t&&t.status==='occupied'&&!db.bills.some(x=>x.status==='open'&&x.id!==b.id&&x.tableIds.includes(tid)))t.status='available';});}
+// จำนวนครั้งที่แก้ (นับรวมการคิดเงินซ้ำของระบบรุ่นก่อน) และเวลาแก้ล่าสุด
+function editInfo(b){
+  const paidLogs=(b.history||[]).filter(x=>x.action==='คิดเงิน');
+  const n=(b.edits||0)+Math.max(0,paidLogs.length-1); if(!n)return null;
+  return {n,last:b.lastEditAt||(paidLogs.length?paidLogs[paidLogs.length-1].at:b.closedAt)};
+}
+// เวลาเทียบกับวันของบิล: วันเดียวกันโชว์แค่เวลา คนละวันโชว์วันที่ด้วย
+function whenRel(iso,refIso){if(!iso)return '';if(dateOf(iso)===dateOf(refIso))return hhmm(iso);const d=new Date(iso);return `${d.getDate()} ${TH_MON[d.getMonth()]} ${hhmm(iso)}`;}
 function voidBill(id){const b=db.bills.find(x=>x.id===id);b.status='void';b.tableIds.forEach(tid=>{if((db.tables.find(t=>t.id===tid)||{}).status==='billing')setStatus(tid,'available');});billLog(b,'ยกเลิกบิล',fmt(b.total));modal=null;save();render();}
 
 function clockIn(p){if(!db.shifts.some(s=>s.staffId===p.id&&!s.outAt))db.shifts.unshift({id:uid(),staffId:p.id,staffName:p.name,inAt:new Date().toISOString(),outAt:null});save();}
