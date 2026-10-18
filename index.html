@@ -803,7 +803,7 @@ function summaryData(){
   const banks=tb.some(b=>b.bank)?Object.entries(bankMap).sort((a,b)=>b[1]-a[1]):[];
   const days=[],wd=['อา','จ','อ','พ','พฤ','ศ','ส'];
   for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);const ds=dstr(d);
-    days.push({lbl:wd[d.getDay()],val:paid.filter(b=>dateOf(b.closedAt)===ds).reduce((s,b)=>s+b.total,0),today:ds===t});}
+    days.push({lbl:wd[d.getDay()],key:ds,val:paid.filter(b=>dateOf(b.closedAt)===ds).reduce((s,b)=>s+b.total,0),today:ds===t});}
   // เมนูขายดี (รวมทุกวัน)
   const pkgNames=new Set(db.packages.map(p=>p.name));
   const soldMap={};
@@ -823,7 +823,8 @@ function viewSummary(){
       <div class="stat"><div class="l">จำนวนบิล</div><div class="v">${d.count}</div></div>
       <div class="stat"><div class="l">จำนวนหัว</div><div class="v">${d.heads}</div></div></div>
     <div class="card" style="margin-bottom:12px"><div class="sec">ยอดขาย 7 วัน</div>
-      <div class="bars">${d.days.map(x=>`<div class="col"><div class="bar ${x.today?'today':''}" style="height:${Math.round(x.val/max*100)}%"></div><div class="lbl">${x.lbl}</div></div>`).join('')}</div></div>
+      <div class="bars">${d.days.map(x=>`<div class="col" data-act="drill" data-mode="day" data-k="${x.key}" style="cursor:pointer"><div class="bar ${x.today?'today':''}" style="height:${Math.round(x.val/max*100)}%"></div><div class="lbl">${x.lbl}</div></div>`).join('')}</div>
+      <div class="muted" style="font-size:11.5px;text-align:center;margin-top:8px">แตะแท่งเพื่อดูรายละเอียดวันนั้น</div></div>
     <div class="card" style="margin-bottom:12px"><div class="sec">ช่องทางรับเงินวันนี้</div>
       ${[['เงินสด',d.cash],['โอน',d.transfer],[(db.settings.customName||'ช่องพิเศษ'),d.qr]].map(([l,v],i)=>`<div style="display:flex;justify-content:space-between;font-size:14.5px;padding:6px 0"><span class="muted">${esc(l)}</span><span style="font-weight:600">${fmt(v)}</span></div>`
         +(i===1?d.banks.map(([bn,bv])=>`<div class="muted" style="display:flex;justify-content:space-between;font-size:12.5px;padding:2px 0 2px 14px"><span>${esc(bn)}</span><span>${fmt(bv)}</span></div>`).join(''):'')).join('')}
@@ -1019,6 +1020,8 @@ function viewBillDetail(){
         ${(()=>{const h=(b.history||[]).filter(x=>x.action!=='บันทึกออเดอร์'&&x.action!=='คิดเงิน');
           return h.length?h.slice().reverse().map(x=>`<div class="listrow"><div>
           <div style="font-size:14px;font-weight:500">${esc(x.action)}${x.detail?' · '+esc(x.detail):''}</div>
+          ${x.changes&&x.changes.length?`<div style="font-size:13px;margin-top:4px;line-height:1.6">${x.changes.map(c=>'• '+esc(c)).join('<br>')}</div>`
+            :x.action==='เปิดแก้ไขบิล'?`<div class="muted" style="font-size:12.5px;margin-top:3px">แก้ด้วยระบบรุ่นก่อน ไม่ได้บันทึกว่าแก้อะไร</div>`:''}
           <div class="muted" style="font-size:12px;margin-top:2px">${whenRel(x.at,b.closedAt||b.openedAt)} · ${esc(x.staffName)}</div></div></div>`).join(''):`<div class="muted" style="font-size:13.5px">ยังไม่มีการแก้ไข</div>`;})()}
       </div>
     </div>
@@ -1551,6 +1554,7 @@ function doExit(){const b=curBill();
   billId=null;payStep=false;billEdited=false;billBackup=null;modal=null;save();render();}
 function checkout(method,pays,bank,cash){const b=curBill();const {total,heads}=totals(b);
   const wasPaid=b.status==='paid', oldTotal=b.total, now=new Date().toISOString();   // wasPaid = กำลังแก้บิลที่จ่ายไปแล้ว
+  const oldLines=wasPaid?(b.lines||[]):[], oldPay=wasPaid?payText(b):'';
   if(cash){b.cashIn=cash.cashIn;b.change=cash.change;}else{delete b.cashIn;delete b.change;}
   const lines=[];db.packages.forEach(p=>{const q=b.pkg[p.id]||0;if(q)lines.push({name:p.name,qty:q,amount:q*p.price,kind:'pkg'});});
   // ของแจกสมาชิก: ราคา 0 แต่เป็น kind 'itm' ชื่อเดียวกับเมนู จำนวนจึงไปรวมกับเมนูสั่งเพิ่มในรายงาน
@@ -1564,7 +1568,8 @@ function checkout(method,pays,bank,cash){const b=curBill();const {total,heads}=t
   if(bank)b.bank=bank;else delete b.bank;
   if(wasPaid){
     b.edits=(b.edits||0)+1; b.lastEditAt=now; delete b.editBak;
-    billLog(b,'แก้ไขบิล',`${fmt(oldTotal)} → ${fmt(total)} · ${payText(b)}`);
+    billLog(b,'แก้ไขบิล',`${fmt(oldTotal)} → ${fmt(total)}`);
+    b.history[b.history.length-1].changes=billChanges(oldLines,lines,oldPay,payText(b));
   }else{
     billLog(b,'คิดเงิน',`${fmt(total)} · ${payText(b)}`);
     b.tableIds.forEach(id=>setStatus(id,'billing'));   // แก้บิลไม่แตะสถานะโต๊ะ โต๊ะอาจมีลูกค้าใหม่แล้ว
@@ -1639,6 +1644,14 @@ function countsFromLines(b){const c={pkg:{},itm:{},svc:{},free:{}};let ok=!!(b.l
     if(!key){ok=false;return;} c[bag][key]=(c[bag][key]||0)+l.qty;
   });
   return ok?c:null;}
+// สรุปว่าการแก้บิลรอบนี้เปลี่ยนอะไร: จำนวนแต่ละรายการ (+/−) และวิธีจ่าย
+function billChanges(oldLines,newLines,oldPay,newPay){
+  const qty=ls=>{const m={};ls.forEach(l=>{const k=lineName(l);m[k]=(m[k]||0)+l.qty;});return m;};
+  const o=qty(oldLines),n=qty(newLines),out=[];
+  [...new Set([...Object.keys(o),...Object.keys(n)])].forEach(k=>{const d=(n[k]||0)-(o[k]||0);if(d)out.push(`${k} ${d>0?'+':'−'}${Math.abs(d)}`);});
+  if(oldPay!==newPay)out.push(`วิธีจ่าย: ${oldPay} → ${newPay}`);
+  return out.length?out:['ไม่ได้เปลี่ยนรายการหรือวิธีจ่าย'];
+}
 function cancelEdit(){const b=curBill();
   if(b&&b.editBak){Object.assign(b,billSnap(b.editBak));delete b.editBak;}
   billId=null;payStep=false;billEdited=false;billBackup=null;modal=null;backFromEdit();save();render();}
