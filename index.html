@@ -681,7 +681,12 @@ function viewBilling(){
           <button class="btn ${b.saved?'btn-ghost':'btn-primary'}" style="flex:1" data-act="bill-close">${b.saved?'บันทึกไว้':'บันทึกออเดอร์'}</button>
           ${b.saved?`<button class="btn btn-primary" style="flex:1.5" data-act="pay-start" ${total===0?'disabled':''}>${I.receipt} คิดเงิน</button>`:''}</div>
         ${!b.saved?`<div class="muted" style="font-size:12.5px;text-align:center;margin-top:10px">บันทึกออเดอร์ก่อน แล้วเปิดโต๊ะอีกครั้งเพื่อคิดเงิน</div>`:''}`
-      :`<div class="muted" style="font-size:13px;margin-bottom:10px">รับเงินแบบไหน?</div>
+      :hasDisc(b)&&payable(b)===0?`<div style="font-size:14px;color:var(--amber);font-weight:600;margin-bottom:12px">เจ้าของร้านให้ฟรีทั้งบิล${b.discNote?' · '+esc(b.discNote):''}</div>
+        <button class="btn btn-primary" data-act="pay-free">${I.check} ปิดบิล (ให้ฟรี)</button>
+        <button class="link" style="justify-content:center;width:100%;margin-top:12px" data-act="pay-cancel">ยกเลิก</button>`
+      :`${hasDisc(b)?`<div style="font-size:13.5px;color:var(--amber);margin:-4px 0 6px">${b.discNote?esc(b.discNote)+' · ':''}ส่วนลดจากเจ้าของร้าน −${fmt(discOf(b))}</div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px"><span class="muted" style="font-size:14px">ต้องจ่าย</span><span style="font-size:24px;font-weight:700">${fmt(payable(b))}</span></div>`:''}
+        <div class="muted" style="font-size:13px;margin-bottom:10px">รับเงินแบบไหน?</div>
         <div style="display:flex;gap:8px"><button class="btn btn-primary btn-sm" style="flex:1" data-act="pay-cash">${I.cash} เงินสด</button>
           <button class="btn btn-ghost btn-sm" style="flex:1" data-act="pay-qr" data-m="transfer">${I.qr} โอน</button>
           <button class="btn btn-ghost btn-sm" style="flex:1" data-act="pay-qr" data-m="custom">${I.wallet} ${esc(db.settings.customName||'ช่องพิเศษ')}</button></div>
@@ -697,9 +702,8 @@ function lineRow(name,sub,qty,kind,id){
 }
 
 /* ---------- RECEIPT ---------- */
-function payLabel(m){return m==='cash'?'เงินสด':m==='transfer'?'โอน':m==='split'?'แบ่งจ่ายหลายช่องทาง':(m==='custom'||m==='qr')?(db.settings.customName||'ช่องพิเศษ'):'';}
+function payLabel(m){return m==='cash'?'เงินสด':m==='transfer'?'โอน':m==='split'?'แบ่งจ่ายหลายช่องทาง':m==='free'?'ให้ฟรี':(m==='custom'||m==='qr')?(db.settings.customName||'ช่องพิเศษ'):'';}
 const PAY_KEYS=['cash','transfer','kk','custom'];
-const SPLIT_KEYS=['cash','transfer','custom'];
 function payKeyLabel(k){return k==='cash'?'เงินสด':k==='transfer'?'โอน':k==='kk'?'คนละครึ่ง':(db.settings.customName||'ช่องพิเศษ');}
 // แยกยอดของบิลตามช่องทางรับเงินจริง (บิลแบ่งจ่ายแตกเป็นหลายช่อง; บิลรุ่นเก่า pays.tr = โอน)
 function payAmounts(b){
@@ -711,19 +715,29 @@ function payParts(b){if(b.paymentMethod!=='split')return [];const a=payAmounts(b
 // ชื่อช่องทางของบิล (บิลโอนต่อท้ายด้วยธนาคารที่เลือกไว้)
 function payName(b){return payLabel(b.paymentMethod||'')+(b.paymentMethod==='transfer'&&b.bank?' · '+b.bank:'');}
 function payText(b){const parts=payParts(b);return parts.length?parts.map(([l,v])=>`${l} ${fmt(v)}`).join(' · '):payName(b);}
+// ยอดที่ลูกค้าต้องจ่ายจริง = ยอดบิล − ส่วนลด (ให้ฟรี = ลดเต็มยอด)
+// ส่วนลดที่เจ้าของร้านตั้งไว้ (discFree = ให้ฟรีทั้งบิล แม้สั่งเพิ่มทีหลังก็ยังฟรี)
+function discOf(b){const g=totals(b).total;return b.discFree?g:Math.min(b.discount||0,g);}
+function hasDisc(b){return !!b.discFree||(b.discount||0)>0;}
+function payable(b){return Math.max(0,Math.round((totals(b).total-discOf(b))*100)/100);}
+// ส่วนลดคิดเป็นสัดส่วนของแต่ละรายการ ให้รายงานเมนูไม่โชว์ยอดเงินเกินที่ได้รับจริง (จำนวนที่ขายยังนับเต็ม)
+function lineAmt(b,l){const d=b.discount||0;return d>0?l.amount*b.total/(b.total+d):l.amount;}
+function discRowHTML(b){const d=b.discount||0;if(!(d>0))return '';
+  return `<div class="rc-line" style="color:var(--amber)"><span>${b.paymentMethod==='free'?'ให้ฟรี':'ส่วนลด'}${b.discNote?' · '+esc(b.discNote):''}</span><span>−${fmt(d)}</span></div>`;}
 // ธนาคารที่ถูกเลือกบ่อย (นับจากบิลที่ปิดแล้ว) ขึ้นก่อน
 function banksByUse(){const m={};db.bills.forEach(b=>{if(b.status==='paid'&&b.bank)m[b.bank]=(m[b.bank]||0)+1;});return [...db.banks].sort((a,b)=>(m[b.name]||0)-(m[a.name]||0));}
 // ของแจกสมาชิกใช้ชื่อเดียวกับเมนูเพื่อให้จำนวนไปรวมกัน เวลาแสดงจึงต่อท้ายให้รู้ว่าเป็นของฟรี
 function lineName(l){return l.name+(l.free?' (สมาชิก)':'');}
 // บรรทัด "ชำระโดย" ในใบเสร็จ: บิลแบ่งจ่ายแตกเป็นหลายบรรทัดตามช่องทาง
 // บิลเงินสดที่ใส่ยอดรับมา: แสดงยอดรับและเงินทอนใต้ "ชำระโดย"
-function cashRows(b){return b.paymentMethod==='cash'&&b.cashIn!=null?[['รับเงินมา',b.cashIn],['เงินทอน',b.change||0]]:[];}
+function cashRows(b){return (b.paymentMethod==='cash'||b.paymentMethod==='split')&&b.cashIn!=null?[['รับเงินสดมา',b.cashIn],['เงินทอน',b.change||0]]:[];}
 function payRowsHTML(b){
   const parts=payParts(b);
   if(!parts.length)return `<div class="rc-line" style="color:var(--muted)"><span>ชำระโดย</span><span>${esc(payName(b))}</span></div>`
     +cashRows(b).map(([l,v],i)=>`<div class="rc-line" style="padding-left:14px;${i?'font-weight:700':'color:var(--muted)'}"><span>${l}</span><span>${fmt(v)}</span></div>`).join('');
   return `<div class="rc-line" style="color:var(--muted)"><span>ชำระโดย</span><span>แบ่งจ่าย</span></div>`
-    +parts.map(([l,v])=>`<div class="rc-line" style="color:var(--muted);padding-left:14px"><span>${esc(l)}</span><span>${fmt(v)}</span></div>`).join('');
+    +parts.map(([l,v])=>`<div class="rc-line" style="color:var(--muted);padding-left:14px"><span>${esc(l)}</span><span>${fmt(v)}</span></div>`).join('')
+    +cashRows(b).map(([l,v],i)=>`<div class="rc-line" style="padding-left:14px;${i?'font-weight:700':'color:var(--muted)'}"><span>${l}</span><span>${fmt(v)}</span></div>`).join('');
 }
 function viewReceipt(){
   const b=receipt;
@@ -737,6 +751,7 @@ function viewReceipt(){
       <div class="rc-div"></div>
       ${b.lines.map(l=>`<div class="rc-line"><span>${esc(lineName(l))}<span class="q">× ${l.qty}</span></span><span>${fmt(l.amount)}</span></div>`).join('')}
       <div class="rc-div"></div>
+      ${discRowHTML(b)}
       <div class="rc-total"><span class="muted" style="font-size:14px">รวมทั้งหมด</span><span class="v">${fmt(b.total)}</span></div>
       ${payRowsHTML(b)}
       ${editLineHTML(b)}
@@ -751,7 +766,7 @@ function receiptPNG(){slipPNG(slipFromBill(receipt));}
 
 /* ---------- SLIP QR (ลูกค้าสแกนเปิดใบเสร็จแล้วโหลดเองได้) ---------- */
 // ย่อข้อมูลบิลให้สั้นที่สุด แล้วฝังลงลิงก์ (ไม่เก็บขึ้นเซิร์ฟเวอร์)
-function slipFromBill(b){const parts=payParts(b);const s={s:db.settings.shopName,n:b.no,t:b.tableLabel,d:b.closedAt,o:b.openedByName||'',p:parts.length?'แบ่งจ่าย':payName(b),tot:b.total,l:(b.lines||[]).map(x=>[lineName(x),x.qty,x.amount])};const sub=parts.length?parts:cashRows(b);if(sub.length)s.pp=sub;return s;}
+function slipFromBill(b){const parts=payParts(b);const s={s:db.settings.shopName,n:b.no,t:b.tableLabel,d:b.closedAt,o:b.openedByName||'',p:parts.length?'แบ่งจ่าย':payName(b),tot:b.total,l:(b.lines||[]).map(x=>[lineName(x),x.qty,x.amount])};if(b.discount>0)s.dc=b.discount;const sub=parts.length?parts.concat(cashRows(b)):cashRows(b);if(sub.length)s.pp=sub;return s;}
 function slipUrl(b){const json=JSON.stringify(slipFromBill(b));const data=btoa(unescape(encodeURIComponent(json)));return location.origin+location.pathname+'#slip='+data;}
 function slipFromHash(){try{const h=location.hash||'';if(h.indexOf('#slip=')!==0)return null;return JSON.parse(decodeURIComponent(escape(atob(h.slice(6)))));}catch(e){return null;}}
 function renderSlipView(s){
@@ -765,6 +780,7 @@ function renderSlipView(s){
       <div class="rc-div"></div>
       ${(s.l||[]).map(x=>line(x[0],x[1],x[2])).join('')||`<div class="muted" style="font-size:13px">ไม่มีรายการ</div>`}
       <div class="rc-div"></div>
+      ${s.dc>0?`<div class="rc-line" style="color:var(--amber)"><span>ส่วนลด</span><span>−${fmt(s.dc)}</span></div>`:''}
       <div class="rc-total"><span class="muted" style="font-size:14px">รวมทั้งหมด</span><span class="v">${fmt(s.tot)}</span></div>
       ${s.p?`<div class="rc-line" style="color:var(--muted)"><span>ชำระโดย</span><span>${esc(s.p)}</span></div>`:''}
       ${(s.pp||[]).map(x=>`<div class="rc-line" style="color:var(--muted);padding-left:14px"><span>${esc(x[0])}</span><span>${fmt(x[1])}</span></div>`).join('')}
@@ -772,7 +788,7 @@ function renderSlipView(s){
     <div class="foot"><button class="btn btn-primary" data-act="slip-save">${I.download} บันทึกรูปใบเสร็จ</button></div></div>`;
 }
 function slipPNG(s){
-  const pad=28,W=460,lh=30; const lines=s.l||[]; const pp=s.pp||[]; const H=210+lines.length*lh+120+pp.length*24;
+  const pad=28,W=460,lh=30; const lines=s.l||[]; const pp=s.pp||[]; const H=210+lines.length*lh+120+pp.length*24+(s.dc>0?lh:0);
   const cv=document.createElement('canvas'); cv.width=W*2; cv.height=H*2; const g=cv.getContext('2d'); g.scale(2,2);
   g.fillStyle='#fff'; g.fillRect(0,0,W,H);
   g.textAlign='center'; g.fillStyle='#1c1917'; g.font='700 20px sans-serif'; g.fillText('🔥 '+(s.s||''),W/2,48);
@@ -783,6 +799,7 @@ function slipPNG(s){
   g.fillStyle='#1c1917'; g.font='14px sans-serif';
   lines.forEach(l=>{g.textAlign='left'; g.fillText(l[0]+'  × '+l[1],pad,y); g.textAlign='right'; g.fillText(fmt(l[2]),W-pad,y); y+=lh;});
   g.strokeStyle='#ecebe7'; g.beginPath(); g.moveTo(pad,y-8); g.lineTo(W-pad,y-8); g.stroke(); y+=16;
+  if(s.dc>0){g.textAlign='left'; g.fillStyle='#d18700'; g.font='14px sans-serif'; g.fillText('ส่วนลด',pad,y); g.textAlign='right'; g.fillText('−'+fmt(s.dc),W-pad,y); y+=lh;}
   g.textAlign='left'; g.fillStyle='#9a938a'; g.font='14px sans-serif'; g.fillText('รวมทั้งหมด',pad,y);
   g.textAlign='right'; g.fillStyle='#1c1917'; g.font='700 24px sans-serif'; g.fillText(fmt(s.tot),W-pad,y+4); y+=34;
   if(s.p){g.textAlign='left'; g.fillStyle='#9a938a'; g.font='13px sans-serif'; g.fillText('ชำระโดย '+s.p,pad,y); y+=pp.length?24:30;}
@@ -792,12 +809,15 @@ function slipPNG(s){
 }
 
 /* ---------- SUMMARY (+ สถิติเชิงลึก) ---------- */
+// ส่วนลด/ให้ฟรีรวม: ยอดที่ไม่ได้รับ จำนวนบิลที่ลด และจำนวนบิลที่ให้ฟรี
+function discStats(bills){const d=bills.filter(b=>b.discount>0);return {amt:d.reduce((s,b)=>s+b.discount,0),n:d.length,free:d.filter(b=>b.paymentMethod==='free').length};}
 function summaryData(){
   const t=today(); const paid=db.bills.filter(b=>b.status==='paid');
   const tb=paid.filter(b=>dateOf(b.closedAt)===t);
   const sales=tb.reduce((s,b)=>s+(b.total||0),0), heads=tb.reduce((s,b)=>s+(b.heads||0),0);
   const sumPay=k=>tb.reduce((s,b)=>s+payAmounts(b)[k],0);
   const cash=sumPay('cash'), transfer=sumPay('transfer'), qr=sumPay('custom'), kk=sumPay('kk');
+  const disc=discStats(tb);
   // ยอดโอนแยกตามธนาคาร (แสดงเมื่อมีบิลที่ระบุธนาคาร)
   const bankMap={}; tb.forEach(b=>{const v=payAmounts(b).transfer;if(v>0){const k=b.bank||'ไม่ระบุ';bankMap[k]=(bankMap[k]||0)+v;}});
   const banks=tb.some(b=>b.bank)?Object.entries(bankMap).sort((a,b)=>b[1]-a[1]):[];
@@ -807,13 +827,13 @@ function summaryData(){
   // เมนูขายดี (รวมทุกวัน)
   const pkgNames=new Set(db.packages.map(p=>p.name));
   const soldMap={};
-  tb.forEach(b=>(b.lines||[]).forEach(l=>{if(l.kind==='pkg'||pkgNames.has(l.name))return;const s=soldMap[l.name]||{qty:0,amt:0};s.qty+=l.qty;s.amt+=l.amount;soldMap[l.name]=s;}));
+  tb.forEach(b=>(b.lines||[]).forEach(l=>{if(l.kind==='pkg'||pkgNames.has(l.name))return;const s=soldMap[l.name]||{qty:0,amt:0};s.qty+=l.qty;s.amt+=lineAmt(b,l);soldMap[l.name]=s;}));
   const sold=Object.entries(soldMap).map(([name,v])=>({name,qty:v.qty,amt:v.amt})).sort((a,b)=>b.qty-a.qty);
   // ช่วงเวลาพีค (รวมทุกวัน ตามชั่วโมง)
   const hourMap={};
   paid.forEach(b=>{const h=new Date(b.closedAt).getHours(); hourMap[h]=(hourMap[h]||0)+b.total;});
   const peak=Object.entries(hourMap).map(([h,v])=>({h:+h,v})).sort((a,b)=>b.v-a.v).slice(0,3);
-  return {sales,heads,cash,transfer,qr,kk,banks,count:tb.length,days,sold,peak};
+  return {sales,heads,cash,transfer,qr,kk,banks,disc,count:tb.length,days,sold,peak};
 }
 function viewSummary(){
   const d=summaryData(); const max=Math.max(1,...d.days.map(x=>x.val));
@@ -828,7 +848,9 @@ function viewSummary(){
     <div class="card" style="margin-bottom:12px"><div class="sec">ช่องทางรับเงินวันนี้</div>
       ${[['เงินสด',d.cash],['โอน',d.transfer],[(db.settings.customName||'ช่องพิเศษ'),d.qr]].map(([l,v],i)=>`<div style="display:flex;justify-content:space-between;font-size:14.5px;padding:6px 0"><span class="muted">${esc(l)}</span><span style="font-weight:600">${fmt(v)}</span></div>`
         +(i===1?d.banks.map(([bn,bv])=>`<div class="muted" style="display:flex;justify-content:space-between;font-size:12.5px;padding:2px 0 2px 14px"><span>${esc(bn)}</span><span>${fmt(bv)}</span></div>`).join(''):'')).join('')}
-      ${d.kk>0?`<div style="display:flex;justify-content:space-between;font-size:14.5px;padding:6px 0"><span class="muted">คนละครึ่ง</span><span style="font-weight:600">${fmt(d.kk)}</span></div>`:''}</div>
+      ${d.kk>0?`<div style="display:flex;justify-content:space-between;font-size:14.5px;padding:6px 0"><span class="muted">คนละครึ่ง</span><span style="font-weight:600">${fmt(d.kk)}</span></div>`:''}
+      ${d.disc.n>0?`<div style="display:flex;justify-content:space-between;font-size:14.5px;padding:6px 0;margin-top:6px;border-top:1px dashed var(--line);color:var(--amber)"><span>ส่วนลด/ให้ฟรี (ไม่นับเป็นยอดขาย)</span><span style="font-weight:600">−${fmt(d.disc.amt)}</span></div>
+        <div class="muted" style="font-size:12.5px">${d.disc.n} บิล${d.disc.free?` · ให้ฟรี ${d.disc.free} บิล`:''}</div>`:''}</div>
     <div class="card" style="margin-bottom:12px"><div class="sec">เมนูที่ขายวันนี้</div>
       ${d.sold.length?d.sold.map((x,i)=>`<div style="display:flex;justify-content:space-between;font-size:14.5px;padding:7px 0;${i<d.sold.length-1?'border-bottom:1px solid var(--line2)':''}"><span>${esc(x.name)}</span><span class="muted">${x.qty} · ${fmt(x.amt)}</span></div>`).join(''):`<div class="muted" style="font-size:13.5px">ยังไม่มีการขาย</div>`}</div>
     <div class="card" style="margin-bottom:16px"><div class="sec">ช่วงเวลาขายดี</div>
@@ -848,7 +870,7 @@ function summaryPNG(){
   g.fillStyle='#fff'; g.fillRect(0,0,620,360);
   g.fillStyle='#1c1917'; g.font='700 24px sans-serif'; g.fillText('🔥 '+db.settings.shopName,28,48);
   g.fillStyle='#9a938a'; g.font='15px sans-serif'; g.fillText('สรุปยอดวันนี้ · '+today(),28,74);
-  const rows=[['ยอดขาย',fmt(d.sales)],['จำนวนบิล',d.count+' บิล'],['จำนวนหัว',d.heads+' หัว'],['เงินสด',fmt(d.cash)],['โอน / ช่องอื่น',fmt(d.transfer+d.qr+d.kk)]];
+  const rows=[['ยอดขาย',fmt(d.sales)],['จำนวนบิล',d.count+' บิล'],['จำนวนหัว',d.heads+' หัว'],['เงินสด',fmt(d.cash)],['โอน / ช่องอื่น',fmt(d.transfer+d.qr+d.kk)],...(d.disc.n>0?[['ส่วนลด/ให้ฟรี','−'+fmt(d.disc.amt)]]:[])];
   rows.forEach((r,i)=>{const y=126+i*44; g.textAlign='left';g.fillStyle='#9a938a';g.font='16px sans-serif';g.fillText(r[0],28,y);
     g.textAlign='right';g.fillStyle='#1c1917';g.font='700 19px sans-serif';g.fillText(r[1],592,y);});
   const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='สรุป-'+today()+'.png'; a.click();
@@ -873,7 +895,7 @@ function dashData(){
   const resvToday=db.reservations.filter(r=>r.status==='booked'&&r.date===t).length;
   const hours=Array(24).fill(0); paid.forEach(b=>{hours[new Date(b.closedAt).getHours()]+=b.total;});
   const pkgN=new Set(db.packages.map(p=>p.name)); const menuMap={};
-  paid.forEach(b=>(b.lines||[]).forEach(l=>{if(l.kind==='pkg'||pkgN.has(l.name))return;const s=menuMap[l.name]||{qty:0,amt:0};s.qty+=l.qty;s.amt+=l.amount;menuMap[l.name]=s;}));
+  paid.forEach(b=>(b.lines||[]).forEach(l=>{if(l.kind==='pkg'||pkgN.has(l.name))return;const s=menuMap[l.name]||{qty:0,amt:0};s.qty+=l.qty;s.amt+=lineAmt(b,l);menuMap[l.name]=s;}));
   const menuTop=Object.entries(menuMap).map(([name,v])=>({name,qty:v.qty,amt:v.amt})).sort((a,b)=>b.qty-a.qty).slice(0,10);
   const pm={cash:0,transfer:0,custom:0,kk:0}; paid.forEach(b=>{const a=payAmounts(b); PAY_KEYS.forEach(k=>{pm[k]+=a[k];});});
   const pmTotal=(pm.cash+pm.transfer+pm.custom+pm.kk)||1;
@@ -940,9 +962,9 @@ function periodData(mode,key){
   const sales=bills.reduce((s,b)=>s+b.total,0),count=bills.length,heads=bills.reduce((s,b)=>s+(b.heads||0),0);
   const pm={cash:0,transfer:0,custom:0,kk:0};bills.forEach(b=>{const a=payAmounts(b);PAY_KEYS.forEach(k=>{pm[k]+=a[k];});});
   const pkgN=new Set(db.packages.map(p=>p.name));const mm={};
-  bills.forEach(b=>(b.lines||[]).forEach(l=>{if(l.kind==='pkg'||pkgN.has(l.name))return;const s=mm[l.name]||{qty:0,amt:0};s.qty+=l.qty;s.amt+=l.amount;mm[l.name]=s;}));
+  bills.forEach(b=>(b.lines||[]).forEach(l=>{if(l.kind==='pkg'||pkgN.has(l.name))return;const s=mm[l.name]||{qty:0,amt:0};s.qty+=l.qty;s.amt+=lineAmt(b,l);mm[l.name]=s;}));
   const menu=Object.entries(mm).map(([name,v])=>({name,qty:v.qty,amt:v.amt})).sort((a,b)=>b.qty-a.qty);
-  return {sales,count,heads,pm,menu};
+  return {sales,count,heads,pm,menu,disc:discStats(bills)};
 }
 function monthLabel(ym){const p=ym.split('-');return TH_MON[+p[1]-1]+' '+(+p[0]+543);}
 function dayLabel(ds){const d=new Date(ds+'T00:00:00');return d.getDate()+' '+TH_MON[d.getMonth()]+' '+(d.getFullYear()+543);}
@@ -957,7 +979,7 @@ function drawReport(title,rows){
 }
 function periodPNG(mode,key){const p=periodData(mode,key);
   const rows=[['ยอดขาย',fmt(p.sales)],['จำนวนบิล',p.count+' บิล'],['จำนวนหัว',p.heads+' หัว'],['เฉลี่ยต่อบิล',fmt(p.count?Math.round(p.sales/p.count):0)],
-    ['— ช่องทางจ่าย —',''],['  เงินสด',fmt(p.pm.cash)],['  โอน',fmt(p.pm.transfer)],['  '+(db.settings.customName||'ช่องพิเศษ'),fmt(p.pm.custom)],...(p.pm.kk>0?[['  คนละครึ่ง',fmt(p.pm.kk)]]:[])];
+    ['— ช่องทางจ่าย —',''],['  เงินสด',fmt(p.pm.cash)],['  โอน',fmt(p.pm.transfer)],['  '+(db.settings.customName||'ช่องพิเศษ'),fmt(p.pm.custom)],...(p.pm.kk>0?[['  คนละครึ่ง',fmt(p.pm.kk)]]:[]),...(p.disc.n>0?[['ส่วนลด/ให้ฟรี','−'+fmt(p.disc.amt)]]:[])];
   if(p.menu.length){rows.push(['— เมนูที่ขาย —','']); p.menu.slice(0,15).forEach(x=>rows.push(['  '+x.name,x.qty+' · '+fmt(x.amt)]));}
   drawReport(mode==='month'?'สรุปเดือน '+monthLabel(key):'สรุป '+dayLabel(key), rows);}
 function yearPNG(){const ch=chartData('12m');const total=ch.reduce((s,x)=>s+x.val,0);
@@ -968,6 +990,7 @@ function viewMore(){
   const owner=session.role==='owner';
   const items=[['reservations',I.cal,'จองโต๊ะ','จัดการการจองล่วงหน้า',true]];
   if(owner)items.push(['log',I.list,'ประวัติบิล','บิลวันนี้ · แก้ไข/ยกเลิก · log',true]);
+  if(owner)items.push(['discount',I.edit,'ลดราคา / ให้ฟรี','เฉพาะเจ้าของร้าน · เลือกโต๊ะที่เปิดอยู่',true]);
   return `<div class="pad gcols" style="padding-top:8px">
     ${items.map(([id,ic,t,d])=>`<button class="menucard" data-act="overlay" data-ov="${id}">
       <div class="ic">${ic}</div><div><div class="t">${t}</div><div class="d">${d}</div></div><div class="arr">${I.back.replace('19" y1="12" x2="5','5" y1="12" x2="19').replace('12 19 5 12 12 5','12 5 19 12 12 19')}</div></button>`).join('')}
@@ -975,8 +998,24 @@ function viewMore(){
 }
 
 /* ---------- OVERLAYS (จอง / ลิ้นชัก / log / เวลางาน) ---------- */
+// รายการโต๊ะที่เปิดอยู่ ให้เจ้าของร้านตั้งส่วนลด/ให้ฟรีไว้ล่วงหน้า แล้วพนักงานคิดเงินตามปกติ
+function viewDiscList(){
+  const bills=db.bills.filter(b=>b.status==='open').sort((a,b)=>(parseInt(a.tableLabel)||0)-(parseInt(b.tableLabel)||0));
+  return `<div class="pad">
+    <div class="muted" style="font-size:13px;margin-bottom:14px">ส่วนลดจะไปโผล่ตอนพนักงานกด "คิดเงิน" · ไม่นับเป็นยอดขาย แต่ยังนับจำนวนเมนูที่ใช้</div>
+    ${bills.length===0?`<div class="muted" style="font-size:13.5px">ยังไม่มีโต๊ะที่เปิดอยู่</div>`:bills.map(b=>{const t=totals(b).total;return `<div class="card" style="margin-bottom:10px;padding:14px 16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <div><div style="font-size:15px;font-weight:600">โต๊ะ ${esc(b.tableLabel)}</div>
+          <div class="muted" style="font-size:12.5px;margin-top:2px">ยอดตอนนี้ ${fmt(t)}${b.saved?'':' · ยังไม่บันทึกออเดอร์'}</div>
+          ${hasDisc(b)?`<div style="font-size:12.5px;margin-top:2px;color:var(--amber)">${b.discFree?'ให้ฟรีทั้งบิล':'ลด '+fmt(discOf(b))+' · ต้องจ่าย '+fmt(payable(b))}${b.discNote?' · '+esc(b.discNote):''}</div>`:''}</div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          ${hasDisc(b)?`<button class="iconbtn" style="color:var(--red)" data-act="disc-clear" data-id="${b.id}">ล้าง</button>`:''}
+          <button class="iconbtn" style="color:var(--amber);border-color:var(--amber);white-space:nowrap" data-act="disc-open" data-id="${b.id}">${hasDisc(b)?'แก้':'ลด/ฟรี'}</button></div></div></div>`;}).join('')}
+  </div>`;
+}
 function viewOverlay(){
-  const map={reservations:['จองโต๊ะ',viewResv],log:['ประวัติบิล',viewLog]};
+  const map={reservations:['จองโต๊ะ',viewResv],log:['ประวัติบิล',viewLog],discount:['ลดราคา / ให้ฟรี',viewDiscList]};
+  if(overlay==='discount'&&!isOwner())return '';
   const [title,fn]=map[overlay]; 
   return `<div class="overlay">
     <header class="top"><div class="brand"><button class="ghost-ico" data-act="overlay-close" style="padding:8px">${I.back}</button>
@@ -1011,6 +1050,7 @@ function viewBillDetail(){
         <div class="rc-div"></div>
         ${(b.lines&&b.lines.length)?b.lines.map(l=>`<div class="rc-line"><span>${esc(lineName(l))}<span class="q">× ${l.qty}</span></span><span>${fmt(l.amount)}</span></div>`).join(''):`<div class="muted" style="font-size:13px">ไม่มีรายการ</div>`}
         <div class="rc-div"></div>
+        ${discRowHTML(b)}
         <div class="rc-total"><span class="muted" style="font-size:14px">รวมทั้งหมด</span><span class="v">${fmt(b.total)}</span></div>
         ${payRowsHTML(b)}
         ${editLineHTML(b)}
@@ -1074,6 +1114,7 @@ function viewLog(){
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div><div style="font-size:14.5px;font-weight:600">#${String(b.no).padStart(4,'0')} · โต๊ะ ${esc(b.tableLabel)} ${b.status==='void'?'<span style="color:var(--red)">(ยกเลิก)</span>':b.status==='open'?'<span style="color:var(--amber)">(แก้ค้าง)</span>':''}</div>
         <div class="muted" style="font-size:12px;margin-top:2px">${hhmm(b.closedAt||b.openedAt)} · ${esc(payName(b))} · ${esc(b.openedByName||'')}</div>
+        ${b.discount>0?`<div style="font-size:12px;margin-top:2px;color:var(--amber)">${b.paymentMethod==='free'?'ให้ฟรี':'ส่วนลด'} ${fmt(b.discount)}${b.discNote?' · '+esc(b.discNote):''}</div>`:''}
         ${ei?`<div style="font-size:12px;margin-top:2px;color:var(--amber)">แก้ไข ${ei.n} ครั้ง · ล่าสุด ${whenRel(ei.last,b.closedAt||b.openedAt)}</div>`:''}</div>
         <div style="text-align:right"><div style="font-weight:700">${fmt(b.total)}</div><div class="muted" style="font-size:12px;margin-top:2px">ดูบิล ›</div></div></div></button>`;}).join('')}
   </div>`;
@@ -1189,7 +1230,7 @@ function viewModal(){
       +`<div style="font-size:30px;font-weight:700;margin-bottom:12px">${fmt(p.sales)}</div>`
       +line('จำนวนบิล',p.count+' บิล')+line('จำนวนหัว',p.heads+' หัว')+line('เฉลี่ยต่อบิล',fmt(p.count?Math.round(p.sales/p.count):0))
       +`<div class="rc-div"></div>`
-      +line('เงินสด',fmt(p.pm.cash))+line('โอน',fmt(p.pm.transfer))+line((db.settings.customName||'ช่องพิเศษ'),fmt(p.pm.custom))+(p.pm.kk>0?line('คนละครึ่ง',fmt(p.pm.kk)):'')
+      +line('เงินสด',fmt(p.pm.cash))+line('โอน',fmt(p.pm.transfer))+line((db.settings.customName||'ช่องพิเศษ'),fmt(p.pm.custom))+(p.pm.kk>0?line('คนละครึ่ง',fmt(p.pm.kk)):'')+(p.disc.n>0?line('ส่วนลด/ให้ฟรี ('+p.disc.n+' บิล)','−'+fmt(p.disc.amt)):'')
       +(p.menu.length?`<div class="rc-div"></div><div class="sec" style="margin-bottom:8px">เมนูที่ขาย</div>`+p.menu.slice(0,10).map(x=>`<div style="display:flex;justify-content:space-between;font-size:13.5px;padding:5px 0"><span>${esc(x.name)}</span><span class="muted">${x.qty} · ${fmt(x.amt)}</span></div>`).join(''):'')
       +`<button class="btn btn-primary" style="margin-top:16px" data-act="periodpng" data-mode="${m.mode}" data-k="${m.key}">${I.download} บันทึกภาพ</button>`);
   }
@@ -1200,7 +1241,7 @@ function viewModal(){
       +`<button class="btn btn-ghost" data-act="modal-close">กลับไปแก้ต่อ</button>`);
   }
   if(m.type==='closeday'){const d=summaryData();
-    const rows=[['ยอดขาย',fmt(d.sales)],['จำนวนบิล',d.count+' บิล'],['จำนวนหัว',d.heads+' หัว'],['เงินสด',fmt(d.cash)],['โอน',fmt(d.transfer)],[(db.settings.customName||'ช่องพิเศษ'),fmt(d.qr)],...(d.kk>0?[['คนละครึ่ง',fmt(d.kk)]]:[])];
+    const rows=[['ยอดขาย',fmt(d.sales)],['จำนวนบิล',d.count+' บิล'],['จำนวนหัว',d.heads+' หัว'],['เงินสด',fmt(d.cash)],['โอน',fmt(d.transfer)],[(db.settings.customName||'ช่องพิเศษ'),fmt(d.qr)],...(d.kk>0?[['คนละครึ่ง',fmt(d.kk)]]:[]),...(d.disc.n>0?[['ส่วนลด/ให้ฟรี','−'+fmt(d.disc.amt)]]:[])];
     return sheet(sheetHead('ปิดร้านวันนี้')
       +`<div class="muted" style="font-size:13.5px;margin-bottom:14px">สรุปยอดก่อนปิดร้าน · ${today()}</div>`
       +rows.map(r=>`<div style="display:flex;justify-content:space-between;font-size:14.5px;padding:7px 0;border-bottom:1px solid var(--line2)"><span class="muted">${esc(r[0])}</span><span style="font-weight:600">${r[1]}</span></div>`).join('')
@@ -1219,6 +1260,18 @@ function viewModal(){
       +`<div class="muted" style="font-size:14px;margin-bottom:18px">${toPhone?'หน้าจอจะเป็นแนวตั้งแบบมือถือ เมนูอยู่ด้านล่าง':'หน้าจอจะเป็นแบบคอม มีเมนูด้านข้างและการ์ดหลายคอลัมน์'} · เปลี่ยนกลับได้ทุกเมื่อ</div>`
       +`<button class="btn btn-primary" style="margin-bottom:10px" data-act="layout-go">${toPhone?I.phone+' เปลี่ยนเป็นโหมดโทรศัพท์':I.monitor+' เปลี่ยนเป็นโหมดคอม'}</button>`
       +`<button class="btn btn-ghost" data-act="modal-close">ยกเลิก</button>`);
+  }
+  if(m.type==='discount'){
+    const chips=[['ให้ฟรีทั้งบิล',m.total],...[10,20,50].map(pc=>['ลด '+pc+'%',Math.round(m.total*pc/100)])];
+    return sheet(sheetHead('ลดราคา / ให้ฟรี')
+      +`<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px"><span class="muted" style="font-size:14px">ยอดบิล</span><span style="font-size:22px;font-weight:700">${fmt(m.total)}</span></div>`
+      +`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">${chips.map(([l,v])=>`<button class="chip" data-act="disc-quick" data-v="${v}">${l}</button>`).join('')}</div>`
+      +`<div class="muted" style="font-size:12.5px;margin-bottom:6px">ส่วนลด (฿)</div>`
+      +`<input class="input" data-mfield="amt" inputmode="decimal" placeholder="ใส่จำนวนเงินที่ลด" value="${esc(m.values.amt??'')}" style="margin-bottom:10px">`
+      +`<div class="muted" style="font-size:12.5px;margin-bottom:6px">เหตุผล / ชื่อ (ไม่บังคับ ไม่ขึ้นในใบเสร็จลูกค้า)</div>`
+      +`<input class="input" data-mfield="note" placeholder="เช่น เพื่อน, คนรู้จัก, ลูกค้าประจำ" value="${esc(m.values.note??'')}" style="margin-bottom:10px">`
+      +`<div id="discinfo" style="font-size:13.5px;margin-bottom:14px;min-height:20px"></div>`
+      +`<button class="btn btn-primary" id="discgo" data-act="disc-go">${I.check} ใช้ส่วนลด</button>`);
   }
   if(m.type==='cashpay'){
     return sheet(sheetHead('รับเงินสด')
@@ -1254,9 +1307,14 @@ function viewModal(){
         <div style="flex:1"><div class="muted" style="font-size:12.5px;margin-bottom:6px">${esc(payKeyLabel(k))} (฿)</div><input class="input" data-mfield="${k}" inputmode="decimal" placeholder="0" value="${esc(m.values[k]??'')}"></div>
         <button class="iconbtn" style="height:46px;padding:0 12px" data-act="split-rest" data-k="${k}">ที่เหลือ</button></div>`;
     return sheet(sheetHead('แบ่งจ่ายหลายช่องทาง')
-      +`<div class="muted" style="font-size:13px;margin-bottom:12px">ยอดบิล <b style="color:var(--text)">${fmt(m.total)}</b> · ใส่ยอดที่รับในแต่ละช่องทาง (ช่องที่ไม่ใช้เว้นว่างได้) กด "ที่เหลือ" เพื่อเติมส่วนที่ยังขาด</div>`
-      +SPLIT_KEYS.map(row).join('')
-      +`<div id="splitchk" style="font-size:13px;margin:4px 0 14px;min-height:18px"></div>`
+      +`<div class="muted" style="font-size:13px;margin-bottom:12px">ยอดบิล <b style="color:var(--text)">${fmt(m.total)}</b> · ใส่โอน/ช่องพิเศษก่อน แล้วใส่เงินสดที่ลูกค้าให้มา ระบบคิดเงินทอนให้</div>`
+      +['transfer','custom'].map(row).join('')
+      +`<div style="padding:12px 14px;border-radius:12px;background:var(--line2);margin:2px 0 10px">
+          <div style="display:flex;align-items:flex-end;gap:8px;margin-bottom:8px">
+            <div style="flex:1"><div class="muted" style="font-size:12.5px;margin-bottom:6px">เงินสด · ลูกค้าให้มา (฿)</div><input class="input" data-mfield="cash" inputmode="decimal" placeholder="0" value="${esc(m.values.cash??'')}"></div>
+            <button class="iconbtn" style="height:46px;padding:0 12px;background:var(--surface)" data-act="split-rest" data-k="cash">ที่เหลือ</button></div>
+          <div id="splitquick" style="display:flex;gap:8px;flex-wrap:wrap"></div></div>`
+      +`<div id="splitchk" style="margin:4px 0 14px;min-height:22px"></div>`
       +`<button class="btn btn-primary" id="splitgo" data-act="split-confirm">${I.check} รับเงินแล้ว</button>`);
   }
   if(m.type==='slipqr'){
@@ -1326,9 +1384,19 @@ function afterRender(){
   if(modal&&modal.type==='slipqr')drawSlipQR();
   if(modal&&modal.type==='splitpay')splitUpdate();
   if(modal&&modal.type==='cashpay')cashUpdate();
+  if(modal&&modal.type==='discount')discUpdate();
 }
 // ปุ่มลัดรับเงินสด: พอดี + ปัดขึ้นเป็นหลักร้อย/ห้าร้อย/พัน
 function cashQuick(t){const s=new Set([t]);[100,500,1000].forEach(u=>{const v=Math.ceil(t/u)*u;if(v>t)s.add(v);});return [...s].sort((a,b)=>a-b);}
+function discParts(){const amt=Math.round((parseFloat(modal.values.amt)||0)*100)/100;return {amt,free:amt>0&&amt>=modal.total,ok:amt>0&&modal.total>0};}
+function discUpdate(){
+  if(!modal||modal.type!=='discount')return;
+  const d=discParts(),info=document.getElementById('discinfo'),go=document.getElementById('discgo');
+  if(info)info.innerHTML=!d.ok?`<span class="muted">ใส่ส่วนลด หรือกดปุ่มลัดด้านบน</span>`
+    :d.free?`<span style="color:var(--amber);font-weight:600">ให้ฟรีทั้งบิล (สั่งเพิ่มทีหลังก็ยังฟรี) · ไม่นับเป็นยอดขาย แต่ยังนับจำนวนเมนู</span>`
+    :`<span>ต้องจ่าย <b>${fmt(modal.total-d.amt)}</b> <span class="muted">(ลด ${fmt(d.amt)})</span></span>`;
+  if(go){go.disabled=!d.ok;go.innerHTML=`${I.check} ${d.free?'ตั้งให้ฟรีทั้งบิล':'ตั้งส่วนลด'}`;}
+}
 function cashParts(){const raw=String(modal.values.cashin||'').trim();const got=Math.round((parseFloat(raw)||0)*100)/100;const change=Math.round((got-modal.total)*100)/100;return {raw,got,change,ok:raw!==''&&got>0&&change>=0};}
 function cashUpdate(){
   if(!modal||modal.type!=='cashpay')return;
@@ -1339,11 +1407,24 @@ function cashUpdate(){
   if(go)go.disabled=!c.ok;
 }
 // เช็คว่า คนละครึ่ง + โอน = ยอดบิลพอดี ถึงจะกดรับเงินได้
-function splitParts(){const v={};let sum=0,neg=false;SPLIT_KEYS.forEach(k=>{const n=Math.round((parseFloat(modal.values[k])||0)*100)/100;if(n<0)neg=true;v[k]=n;sum+=n;});const diff=Math.round((modal.total-sum)*100)/100;return {v,diff,ok:!neg&&diff===0&&modal.total>0};}
+// แบ่งจ่าย: โอน/ช่องพิเศษ ใส่ยอดตรงๆ ส่วนเงินสดใส่ "เงินที่ลูกค้าให้มา" → ส่วนที่จ่ายเป็นเงินสด = ยอดที่เหลือ, ส่วนเกิน = เงินทอน
+function splitParts(){
+  const n=k=>Math.round((parseFloat(modal.values[k])||0)*100)/100;
+  const transfer=n('transfer'),custom=n('custom'),got=n('cash'),neg=transfer<0||custom<0||got<0;
+  const cashDue=Math.round((modal.total-transfer-custom)*100)/100;     // ติดลบ = โอน/ช่องพิเศษ เกินยอดบิล
+  const cash=Math.max(0,Math.min(got,cashDue)), change=Math.round((got-Math.max(0,cashDue))*100)/100;
+  const short=Math.round((Math.max(0,cashDue)-got)*100)/100;
+  const ok=!neg&&modal.total>0&&cashDue>=0&&short<=0&&!(cashDue===0&&got>0);
+  return {v:{cash,transfer,custom},cashDue,got,change,short,ok,cashGiven:got>0};}
 function splitUpdate(){
   if(!modal||modal.type!=='splitpay')return;
-  const p=splitParts(),chk=document.getElementById('splitchk'),go=document.getElementById('splitgo');
-  if(chk){chk.textContent=p.diff===0?'✓ ยอดครบพอดี':(p.diff>0?'ยังขาดอีก '+fmt(p.diff):'เกินยอดบิล '+fmt(-p.diff));chk.style.color=p.diff===0?'var(--green)':'var(--red)';}
+  const p=splitParts(),chk=document.getElementById('splitchk'),go=document.getElementById('splitgo'),q=document.getElementById('splitquick');
+  if(q)q.innerHTML=p.cashDue>0?cashQuick(p.cashDue).map(x=>`<button class="chip" style="background:var(--surface)" data-act="split-cash-quick" data-v="${x}">${x===p.cashDue?'พอดี '+fmt(x):fmt(x)}</button>`).join(''):'';
+  if(chk)chk.innerHTML=p.cashDue<0?`<span style="color:var(--red);font-size:13.5px">โอน/ช่องพิเศษ เกินยอดบิล ${fmt(-p.cashDue)}</span>`
+    :p.cashDue===0&&p.got>0?`<span style="color:var(--red);font-size:13.5px">ยอดครบแล้ว ไม่ต้องรับเงินสด</span>`
+    :p.short>0?`<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="color:var(--red);font-size:14px">ยังขาดอีก</span><span style="color:var(--red);font-size:20px;font-weight:700">${fmt(p.short)}</span></div>`
+    :p.cashDue>0?`<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="color:var(--green);font-size:14px">เงินสด ${fmt(p.cashDue)} · เงินทอน</span><span style="color:var(--green);font-size:24px;font-weight:700">${fmt(p.change)}</span></div>`
+    :`<span style="color:var(--green);font-size:13.5px">✓ ยอดครบพอดี</span>`;
   if(go)go.disabled=!p.ok;
 }
 function drawSlipQR(){
@@ -1426,31 +1507,45 @@ app.addEventListener('click',e=>{
       save();render();break;}
     case 'pay-start': payStep=true; render(); break;
     case 'pay-cancel': payStep=false; render(); break;
-    case 'pay-cash':{modal={type:'cashpay',total:totals(curBill()).total,values:{cashin:''}};render();break;}
+    case 'pay-free': checkout('free'); break;
+    case 'disc-open':{if(!isOwner())break;const cb=db.bills.find(x=>x.id===id);if(!cb)break;
+      modal={type:'discount',billId:cb.id,total:totals(cb).total,values:{amt:hasDisc(cb)?String(discOf(cb)):'',note:cb.discNote||''}};render();break;}
+    case 'disc-quick':{if(!modal||modal.type!=='discount')break;modal.values.amt=b.getAttribute('data-v');
+      const ai=document.querySelector('[data-mfield="amt"]');if(ai)ai.value=modal.values.amt;discUpdate();break;}
+    case 'disc-clear':{if(!isOwner())break;const cb=db.bills.find(x=>x.id===id);if(cb){clearDisc(cb);logAct('ล้างส่วนลด','โต๊ะ '+cb.tableLabel);save();render();}break;}
+    case 'disc-go':{if(!modal||modal.type!=='discount'||!isOwner())break;const d=discParts();if(!d.ok)break;const cb=db.bills.find(x=>x.id===modal.billId);if(!cb)break;
+      if(d.free){cb.discFree=true;cb.discount=modal.total;}else{delete cb.discFree;cb.discount=Math.min(d.amt,modal.total);}
+      cb.discNote=String(modal.values.note||'').trim();cb.discBy=session.name;
+      logAct(d.free?'ให้ฟรี':'ตั้งส่วนลด',`โต๊ะ ${cb.tableLabel} · ${d.free?'ทั้งบิล':fmt(cb.discount)}${cb.discNote?' · '+cb.discNote:''}`);
+      modal=null;save();render();break;}
+    case 'pay-cash':{modal={type:'cashpay',total:payable(curBill()),values:{cashin:''}};render();break;}
     case 'cash-quick':{if(!modal||modal.type!=='cashpay')break;modal.values.cashin=b.getAttribute('data-v');
       const ci=document.querySelector('[data-mfield="cashin"]');if(ci)ci.value=modal.values.cashin;cashUpdate();break;}
     case 'cash-confirm':{if(!modal||modal.type!=='cashpay')break;const c=cashParts();if(!c.ok)break;
       modal=null;checkout('cash',null,'',{cashIn:c.got,change:c.change});break;}
     case 'pay-qr':{const meth=b.getAttribute('data-m'); const name=meth==='transfer'?'โอน — สแกน QR':(db.settings.customName||'ช่องพิเศษ'); const img=meth==='transfer'?db.settings.transferQR:db.settings.customImg; modal={type:'qrpay',method:meth,name,img}; render(); break;}
     case 'qrpay-confirm':{const meth=b.getAttribute('data-m');
-      if(meth==='transfer'&&db.banks.length){modal={type:'bankpick',method:'transfer',amount:totals(curBill()).total};render();}
+      if(meth==='transfer'&&db.banks.length){modal={type:'bankpick',method:'transfer',amount:payable(curBill())};render();}
       else{modal=null;checkout(meth);} break;}
-    case 'bank-pick':{if(!modal||modal.type!=='bankpick')break;const bm=modal;modal=null;checkout(bm.method,bm.pays,b.getAttribute('data-bank')||'');break;}
+    case 'bank-pick':{if(!modal||modal.type!=='bankpick')break;const bm=modal;modal=null;checkout(bm.method,bm.pays,b.getAttribute('data-bank')||'',bm.cash||null);break;}
     case 'test-open': modal={type:'testenter',values:{}}; render(); break;
     case 'test-enter-go':{if(!modal||modal.type!=='testenter')break;
       if(((modal.values||{}).testpw||'')===ADMIN_PW)enterTestMode(); else{modal.err=true;render();} break;}
     case 'test-exit': modal={type:'testexit'}; render(); break;
     case 'test-exit-go': exitTestMode(); break;
-    case 'pay-split':{modal={type:'splitpay',total:totals(curBill()).total,values:{cash:'',transfer:'',custom:''}};render();break;}
+    case 'pay-split':{modal={type:'splitpay',total:payable(curBill()),values:{cash:'',transfer:'',custom:''}};render();break;}
     case 'split-rest':{if(!modal||modal.type!=='splitpay')break;const k=b.getAttribute('data-k');
-      const others=SPLIT_KEYS.filter(x=>x!==k).reduce((s,x)=>s+(parseFloat(modal.values[x])||0),0);
-      const rest=Math.max(0,Math.round((modal.total-others)*100)/100);
-      modal.values[k]=rest?String(rest):'';
+      const v=x=>parseFloat(modal.values[x])||0;
+      const rest=k==='cash'?modal.total-v('transfer')-v('custom'):modal.total-v(k==='transfer'?'custom':'transfer')-v('cash');
+      const r=Math.max(0,Math.round(rest*100)/100);modal.values[k]=r?String(r):'';
       const inp=document.querySelector(`[data-mfield="${k}"]`);if(inp)inp.value=modal.values[k];
       splitUpdate();break;}
+    case 'split-cash-quick':{if(!modal||modal.type!=='splitpay')break;modal.values.cash=b.getAttribute('data-v');
+      const ci=document.querySelector('[data-mfield="cash"]');if(ci)ci.value=modal.values.cash;splitUpdate();break;}
     case 'split-confirm':{if(!modal||modal.type!=='splitpay')break;const p=splitParts();if(!p.ok)break;
-      if(p.v.transfer>0&&db.banks.length){modal={type:'bankpick',method:'split',pays:p.v,amount:p.v.transfer};render();}
-      else{modal=null;checkout('split',p.v);} break;}
+      const cashInfo=p.v.cash>0?{cashIn:p.got,change:p.change}:null;
+      if(p.v.transfer>0&&db.banks.length){modal={type:'bankpick',method:'split',pays:p.v,cash:cashInfo,amount:p.v.transfer};render();}
+      else{modal=null;checkout('split',p.v,'',cashInfo);} break;}
     case 'img-del':{const k=b.getAttribute('data-img'); db.settings[k]=''; save(); render(); break;}
     case 'op-move': modal={type:'move'}; render(); break;
     case 'op-merge': modal={type:'merge'}; render(); break;
@@ -1517,6 +1612,7 @@ app.addEventListener('input',e=>{
   const mf=e.target.getAttribute('data-mfield'); if(mf&&modal)modal.values[mf]=e.target.value;
   if(mf&&modal&&modal.type==='splitpay')splitUpdate();
   if(mf&&modal&&modal.type==='cashpay')cashUpdate();
+  if(mf&&modal&&modal.type==='discount')discUpdate();
 });
 app.addEventListener('change',e=>{const mf=e.target.getAttribute('data-mfield'); if(mf&&modal)modal.values[mf]=e.target.value;
   const ik=e.target.getAttribute('data-img'); if(ik&&e.target.files&&e.target.files[0]){fileToThumb(e.target.files[0],url=>{db.settings[ik]=url;save();render();});}});
@@ -1536,6 +1632,8 @@ function tapTable(t){
   if(t.status==='reserved'){const r=db.reservations.find(x=>x.status==='booked'&&x.tableId===t.id);if(r){modal={type:'seat',id:r.id};render();return;}}
   openBill(t);
 }
+function isOwner(){return !!session&&session.role==='owner';}
+function clearDisc(b){delete b.discount;delete b.discFree;delete b.discNote;delete b.discBy;}
 function closeBill(){const b=curBill();const {total,heads}=totals(b);
   if(heads===0&&total===0){db.bills=db.bills.filter(x=>x.id!==b.id);b.tableIds.forEach(id=>setStatus(id,'available'));}
   else {
@@ -1548,11 +1646,14 @@ function exitBill(){const b=curBill();const {total}=totals(b);
   if((!b.saved&&total>0)||(b.saved&&billEdited)){modal={type:'exitconfirm'};render();return;}
   doExit();}
 function doExit(){const b=curBill();
-  if(b.status==='paid'){cancelEdit();return;}   // ออกจากหน้าแก้บิลที่จ่ายแล้ว = ยกเลิกการแก้ บิลกลับเป็นแบบเดิม
+  if(b.status==='paid'){cancelEdit();return;}
+  // ออกจากหน้าแก้บิลที่จ่ายแล้ว = ยกเลิกการแก้ บิลกลับเป็นแบบเดิม
   if(!b.saved){db.bills=db.bills.filter(x=>x.id!==b.id);b.tableIds.forEach(id=>setStatus(id,'available'));}
   else {if(billBackup){b.pkg=JSON.parse(JSON.stringify(billBackup.pkg));b.itm=JSON.parse(JSON.stringify(billBackup.itm));b.svc=JSON.parse(JSON.stringify(billBackup.svc||{}));b.free=JSON.parse(JSON.stringify(billBackup.free||{}));} b.tableIds.forEach(id=>setStatus(id,'occupied'));}
   billId=null;payStep=false;billEdited=false;billBackup=null;modal=null;save();render();}
-function checkout(method,pays,bank,cash){const b=curBill();const {total,heads}=totals(b);
+function checkout(method,pays,bank,cash){const b=curBill();const {total:gross,heads}=totals(b);
+  const oldDisc=b.status==='paid'?(b.discount||0):0, disc=b.discFree?gross:Math.min(b.discount||0,gross), total=Math.max(0,Math.round((gross-disc)*100)/100);
+  if(disc>0&&total===0)method='free'; if(disc>0)b.discount=disc;else clearDisc(b);
   const wasPaid=b.status==='paid', oldTotal=b.total, now=new Date().toISOString();   // wasPaid = กำลังแก้บิลที่จ่ายไปแล้ว
   const oldLines=wasPaid?(b.lines||[]):[], oldPay=wasPaid?payText(b):'';
   if(cash){b.cashIn=cash.cashIn;b.change=cash.change;}else{delete b.cashIn;delete b.change;}
@@ -1565,15 +1666,16 @@ function checkout(method,pays,bank,cash){const b=curBill();const {total,heads}=t
   // แก้บิล: คงเวลาปิดบิลเดิมไว้ ยอดจึงยังอยู่วันเดิมในรายงาน
   b.status='paid';if(!wasPaid)b.closedAt=now;b.paymentMethod=method;b.total=total;b.heads=heads;b.lines=lines;b.tableLabel=labelFor(b);
   if(method==='split')b.pays={cash:pays.cash||0,transfer:pays.transfer||0,kk:pays.kk||0,custom:pays.custom||0};else delete b.pays;
-  if(bank)b.bank=bank;else delete b.bank;
+  if(bank&&method!=='free')b.bank=bank;else delete b.bank;
   if(wasPaid){
     b.edits=(b.edits||0)+1; b.lastEditAt=now; delete b.editBak;
     billLog(b,'แก้ไขบิล',`${fmt(oldTotal)} → ${fmt(total)}`);
-    b.history[b.history.length-1].changes=billChanges(oldLines,lines,oldPay,payText(b));
+    b.history[b.history.length-1].changes=billChanges(oldLines,lines,oldPay,payText(b),oldDisc,disc);
   }else{
     billLog(b,'คิดเงิน',`${fmt(total)} · ${payText(b)}`);
     b.tableIds.forEach(id=>setStatus(id,'billing'));   // แก้บิลไม่แตะสถานะโต๊ะ โต๊ะอาจมีลูกค้าใหม่แล้ว
   }
+  if(disc>0&&(!wasPaid||disc!==oldDisc))billLog(b,method==='free'?'ให้ฟรี':'ส่วนลด',`${fmt(disc)}${b.discNote?' · '+b.discNote:''} · โดย ${b.discBy||'-'}`);
   receipt=b; billId=null; payStep=false; billEdited=false; save(); render();}
 function setStatus(tid,st){const t=db.tables.find(x=>x.id===tid);if(t)t.status=st;}
 
@@ -1623,7 +1725,7 @@ function doReset(scope){
 }
 // แก้บิลที่จ่ายแล้ว: บิลยังเป็น "จ่ายแล้ว" ตลอดการแก้ (ยอดในรายงานไม่เปลี่ยนจนกว่าจะคิดเงินใหม่)
 // เก็บสำเนารายการก่อนแก้ไว้บนบิล ถ้าแก้ค้างจากรอบก่อน (ปิดแอปกลางคัน) จะคืนค่าจากสำเนานั้นก่อนเริ่ม
-const billSnap=b=>({pkg:JSON.parse(JSON.stringify(b.pkg||{})),itm:JSON.parse(JSON.stringify(b.itm||{})),svc:JSON.parse(JSON.stringify(b.svc||{})),free:JSON.parse(JSON.stringify(b.free||{}))});
+const billSnap=b=>({pkg:JSON.parse(JSON.stringify(b.pkg||{})),itm:JSON.parse(JSON.stringify(b.itm||{})),svc:JSON.parse(JSON.stringify(b.svc||{})),free:JSON.parse(JSON.stringify(b.free||{})),discount:b.discount||0,discNote:b.discNote||'',discBy:b.discBy||''});
 let editReturn=null;
 function reopenBill(id){const b=db.bills.find(x=>x.id===id);if(!b)return;
   if(b.status==='open'){   // บิลที่ค้างสถานะเปิดจากระบบรุ่นก่อน: จำนวนอาจถูกแก้ค้างไว้ → เริ่มจากรายการที่จ่ายจริง
@@ -1645,10 +1747,11 @@ function countsFromLines(b){const c={pkg:{},itm:{},svc:{},free:{}};let ok=!!(b.l
   });
   return ok?c:null;}
 // สรุปว่าการแก้บิลรอบนี้เปลี่ยนอะไร: จำนวนแต่ละรายการ (+/−) และวิธีจ่าย
-function billChanges(oldLines,newLines,oldPay,newPay){
+function billChanges(oldLines,newLines,oldPay,newPay,oldDisc,newDisc){
   const qty=ls=>{const m={};ls.forEach(l=>{const k=lineName(l);m[k]=(m[k]||0)+l.qty;});return m;};
   const o=qty(oldLines),n=qty(newLines),out=[];
   [...new Set([...Object.keys(o),...Object.keys(n)])].forEach(k=>{const d=(n[k]||0)-(o[k]||0);if(d)out.push(`${k} ${d>0?'+':'−'}${Math.abs(d)}`);});
+  if((oldDisc||0)!==(newDisc||0))out.push(`ส่วนลด: ${fmt(oldDisc||0)} → ${fmt(newDisc||0)}`);
   if(oldPay!==newPay)out.push(`วิธีจ่าย: ${oldPay} → ${newPay}`);
   return out.length?out:['ไม่ได้เปลี่ยนรายการหรือวิธีจ่าย'];
 }
